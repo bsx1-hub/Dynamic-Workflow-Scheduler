@@ -1,18 +1,16 @@
 # Dynamic Workflow Scheduler
 
-A C++ scheduling system designed to reduce cognitive load and decision latency in high-volume service workflows.
+A C++ scheduling prototype that prioritizes service orders dynamically to reduce cognitive load and decision latency in high-volume workflows.
 
 ## Overview
 
-The Dynamic Workflow Scheduler is a real-time order prioritization system inspired by my experience working in a high-volume coffee shop environment.
+The Dynamic Workflow Scheduler is a real-time order prioritization system inspired by high-volume coffee shop operations.
 
-During rush periods, I observed that a major workflow bottleneck was not always the physical speed of drink production. Instead, workers were required to continuously process multiple incoming order streams, reprioritize tickets, identify similar tasks, and determine what action should happen next.
+During rush periods, a major workflow bottleneck is not always the physical speed of drink production. Workers also have to process multiple incoming order streams, reprioritize tickets, identify similar tasks, and decide what should happen next.
 
-In other words, the workflow required workers to repeatedly perform a scheduling algorithm mentally while simultaneously completing physical tasks.
+In other words, workers are often performing a scheduling algorithm mentally while also completing physical tasks.
 
-This project explores how software can offload part of that decision-making process.
-
-The scheduler models incoming orders as structured data and dynamically determines their production priority. The long-term goal is to reduce context switching and allow workers to focus on execution rather than continuously reorganizing the workflow in their heads.
+This project explores how software can offload part of that decision-making process. The scheduler models incoming orders as structured data and dynamically determines their production priority. The long-term goal is to reduce context switching so workers can focus on execution instead of continuously reorganizing the workflow in their heads.
 
 ## The Problem
 
@@ -35,7 +33,9 @@ The worker must mentally evaluate both **service urgency** and **process similar
 
 A strict first-in, first-out queue does not capture these workflow constraints. However, a rigid priority system such as:
 
-`Drive-Thru > Mobile > Eat-In`
+```text
+Drive-Thru > Mobile > Eat-In
+```
 
 can cause lower-priority order streams to wait indefinitely during sustained demand.
 
@@ -45,35 +45,37 @@ The Dynamic Workflow Scheduler treats this as a scheduling problem.
 
 The current prototype assigns each order a dynamically increasing urgency score:
 
-`urgency = source rate × seconds waiting`
+```text
+urgency = source rate × seconds waiting
+```
 
 Initial source rates are:
 
 | Order Source | Urgency Rate |
-|---|---:|
+| --- | ---: |
 | Drive-Thru | 1.0 |
 | Mobile | 0.6 |
 | Eat-In | 0.4 |
 
 Drive-thru orders accumulate urgency more quickly because they are more time-sensitive within the modeled workflow.
 
-However, urgency also increases with wait time. An older mobile or eat-in order can eventually overtake a newer drive-thru order.
-
-This aging behavior helps prevent lower-priority order streams from being indefinitely starved.
+However, urgency also increases with wait time. An older mobile or eat-in order can eventually overtake a newer drive-thru order. This aging behavior helps prevent lower-priority order streams from being indefinitely starved.
 
 ### Example
 
 An eat-in order waiting for 200 seconds receives:
 
-`0.4 × 200 = 80`
+```text
+0.4 × 200 = 80
+```
 
 A drive-thru order waiting for 30 seconds receives:
 
-`1.0 × 30 = 30`
+```text
+1.0 × 30 = 30
+```
 
-The scheduler prioritizes the older eat-in order despite the higher base urgency rate of the drive-thru stream.
-
-This creates a dynamic queue rather than a fixed priority hierarchy.
+The scheduler prioritizes the older eat-in order despite the higher base urgency rate of the drive-thru stream. This creates a dynamic queue rather than a fixed priority hierarchy.
 
 ## Architecture
 
@@ -94,3 +96,40 @@ main.cpp
 Order
     |
     +-- shared order data model
+```
+
+### Components
+
+- `Order`: Defines the order data model, source type, and status values.
+- `QueueManager`: Stores orders, marks orders complete, and displays the active queue.
+- `Scheduler`: Calculates urgency scores and sorts waiting orders by priority.
+- `main.cpp`: Seeds example orders and demonstrates queue prioritization.
+
+## Build and Run
+
+Compile the project with a C++17-compatible compiler:
+
+```bash
+g++ -std=c++17 -Wall -Wextra -pedantic main.cpp Order.cpp QueueManager.cpp Scheduler.cpp -o scheduler
+```
+
+Run the scheduler demo:
+
+```bash
+./scheduler
+```
+
+The program prints the queue before and after dynamic prioritization so the effect of the urgency calculation is visible.
+
+## Current Limitations
+
+- The prototype uses hard-coded sample orders in `main.cpp`.
+- Order similarity via `buildKey` is modeled in the data structure but is not yet included in the prioritization score.
+- There is no persistent storage, user interface, or external order input source yet.
+
+## Future Improvements
+
+- Add a build-similarity bonus so similar drinks can be grouped when appropriate.
+- Add configurable source rates and scheduling weights.
+- Support real-time order input from a file, API, or user interface.
+- Add tests for urgency calculation, queue ordering, and completion behavior.
