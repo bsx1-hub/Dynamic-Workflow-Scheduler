@@ -1,63 +1,151 @@
 # Dynamic Workflow Scheduler
 
-A C++ scheduling system designed to reduce cognitive load and decision latency in high-volume service workflows.
+A modular C++ scheduling system designed to reduce cognitive load and decision latency in high-volume service workflows.
 
-## Overview
+## Project Overview
 
-The Dynamic Workflow Scheduler is a real-time order prioritization system inspired by my experience working in a high-volume coffee shop environment.
+The Dynamic Workflow Scheduler is a C++ prototype inspired by workflow bottlenecks I observed while working in a high-volume coffee shop environment.
 
-During rush periods, I observed that a major workflow bottleneck was not always the physical speed of drink production. Instead, workers were required to continuously process multiple incoming order streams, reprioritize tickets, identify similar tasks, and determine what action should happen next.
+During rush periods, workers must process several incoming order streams, identify urgent tickets, recognize similar preparation tasks, and continuously decide what should happen next.
 
-In other words, the workflow required workers to repeatedly perform a scheduling algorithm mentally while simultaneously completing physical tasks.
+The main bottleneck is not always the physical speed of production. It is often the cognitive overhead created by repeatedly sorting, prioritizing, and reorganizing work while completing physical tasks.
 
-This project explores how software can offload part of that decision-making process.
+This project explores how a software scheduling layer can support workers by dynamically organizing incoming orders and recommending a more efficient production sequence.
 
-The scheduler models incoming orders as structured data and dynamically determines their production priority. The long-term goal is to reduce context switching and allow workers to focus on execution rather than continuously reorganizing the workflow in their heads.
+## Problem Statement
 
-## The Problem
+Service workers may receive orders from several concurrent sources:
 
-During a service rush, workers may receive orders from several concurrent sources:
+* Drive-thru
+* Mobile ordering
+* Front-counter or eat-in customers
 
-- Drive-thru
-- Mobile ordering
-- Front-counter or eat-in customers
+Each source may have a different operational priority. At the same time, orders may require different equipment or preparation processes, including:
 
-These streams have different operational priorities.
+* Espresso machine
+* Brewing station
+* Blender
+* Other preparation stations
 
-At the same time, each drink may require a different production process or piece of equipment:
+Workers must mentally balance:
 
-- Espresso machine
-- Brewing station
-- Blender
-- Other preparation processes
+1. Service urgency
+2. Process similarity
 
-The worker must mentally evaluate both **service urgency** and **process similarity**.
+A strict first-in, first-out queue does not account for these workflow constraints.
 
-A strict first-in, first-out queue does not capture these workflow constraints. However, a rigid priority system such as:
+A rigid priority rule such as:
 
-`Drive-Thru > Mobile > Eat-In`
+```text
+Drive-Thru > Mobile > Eat-In
+```
 
-can cause lower-priority order streams to wait indefinitely during sustained demand.
+can also cause lower-priority orders to wait indefinitely during sustained demand.
 
-The Dynamic Workflow Scheduler treats this as a scheduling problem.
+The Dynamic Workflow Scheduler treats this as a real-time scheduling problem rather than a simple queue.
 
-## Current Scheduling Algorithm
+## Current Features
 
-The current prototype assigns each order a dynamically increasing urgency score:
+* Structured order modeling
+* Drive-thru, mobile, and eat-in order sources
+* Order timestamps
+* Waiting, in-progress, and complete statuses
+* Dynamic urgency scoring
+* Aging to reduce starvation
+* Chronological queue display
+* Urgency-based prioritization
+* Deterministic tie-breaking
+* Initial batching compatibility logic
+* Modular C++ architecture
+* Terminal-based demonstration
 
-`urgency = source rate × seconds waiting`
+## Architecture
 
-Initial source rates are:
+The project separates order data, queue management, and scheduling policy.
+
+```text
+main.cpp
+    |
+    +-- QueueManager
+    |       |
+    |       +-- stores and manages Order objects
+    |
+    +-- Scheduler
+            |
+            +-- calculates urgency
+            +-- prioritizes orders
+            +-- evaluates batching compatibility
+
+Order
+    |
+    +-- shared order data model
+```
+
+### Order
+
+The `Order` structure represents one customer order.
+
+Each order currently stores:
+
+* Order ID
+* Drink name
+* Size
+* Hot or iced state
+* Order source
+* Placement timestamp
+* Preparation build key
+* Current status
+
+### QueueManager
+
+`QueueManager` owns the order collection and provides operations for:
+
+* Adding orders
+* Completing orders
+* Displaying the active queue
+* Providing order data to the scheduler
+
+### Scheduler
+
+`Scheduler` contains the scheduling policy.
+
+It is responsible for:
+
+* Calculating urgency
+* Sorting orders by priority
+* Handling deterministic tie-breaking
+* Checking whether two orders may be compatible for batching
+
+### main.cpp
+
+`main.cpp` currently acts as a demonstration program.
+
+It:
+
+* Creates sample orders
+* Displays the queue chronologically
+* Runs the scheduling algorithm
+* Displays the dynamically prioritized queue
+
+## Scheduling Logic
+
+The current scheduler assigns each order an urgency score:
+
+```text
+urgency = source rate × seconds waiting
+```
+
+Initial source rates:
 
 | Order Source | Urgency Rate |
-|---|---:|
-| Drive-Thru | 1.0 |
-| Mobile | 0.6 |
-| Eat-In | 0.4 |
+| ------------ | -----------: |
+| Drive-Thru   |          1.0 |
+| Mobile       |          0.6 |
+| Eat-In       |          0.4 |
 
-Drive-thru orders accumulate urgency more quickly because they are more time-sensitive within the modeled workflow.
+Drive-thru orders accumulate urgency more quickly because they are modeled as more time-sensitive.
 
-However, urgency also increases with wait time. An older mobile or eat-in order can eventually overtake a newer drive-thru order.
+However, urgency also increases with wait time. This means an older mobile or eat-in order can eventually overtake a newer drive-thru order.
 
 This aging behavior helps prevent lower-priority order streams from being indefinitely starved.
 
@@ -65,32 +153,179 @@ This aging behavior helps prevent lower-priority order streams from being indefi
 
 An eat-in order waiting for 200 seconds receives:
 
-`0.4 × 200 = 80`
+```text
+0.4 × 200 = 80
+```
 
 A drive-thru order waiting for 30 seconds receives:
 
-`1.0 × 30 = 30`
+```text
+1.0 × 30 = 30
+```
 
-The scheduler prioritizes the older eat-in order despite the higher base urgency rate of the drive-thru stream.
+The scheduler prioritizes the older eat-in order because its urgency score is higher.
 
-This creates a dynamic queue rather than a fixed priority hierarchy.
+### Eligibility Rules
 
-## Architecture
+Waiting orders are prioritized ahead of orders that are already in progress or complete.
 
-The prototype uses a modular C++ architecture:
+When two orders have equal urgency, the scheduler uses:
+
+1. Earlier placement time
+2. Lower order ID
+
+This produces deterministic output.
+
+### buildKey
+
+`buildKey` represents the primary equipment or preparation process required by an order, such as:
+
+* `espresso`
+* `brew`
+* `frozen`
+* `other`
+
+Orders with matching build keys may be considered for batching.
+
+For example, two drinks with the `espresso` build key may share part of the same preparation workflow.
+
+The current prototype includes a compatibility check using `buildKey`, but it does not yet construct or execute complete production batches.
+
+## Project Structure
 
 ```text
-main.cpp
-    |
-    +-- QueueManager
-    |       |
-    |       +-- owns and manages Order objects
-    |
-    +-- Scheduler
-            |
-            +-- calculates urgency
-            +-- dynamically prioritizes orders
+Dynamic-Workflow-Scheduler/
+├── main.cpp
+├── Order.h
+├── Order.cpp
+├── QueueManager.h
+├── QueueManager.cpp
+├── Scheduler.h
+├── Scheduler.cpp
+└── README.md
+```
 
-Order
-    |
-    +-- shared order data model
+## Build Instructions
+
+### Requirements
+
+* A C++17-compatible compiler
+* GCC, MinGW, Clang, or another supported C++ compiler
+
+### Compile with g++
+
+From the project directory, run:
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g main.cpp Order.cpp QueueManager.cpp Scheduler.cpp -o scheduler.exe
+```
+
+## Run Instructions
+
+### Windows PowerShell
+
+```powershell
+.\scheduler.exe
+```
+
+### Linux or macOS
+
+```bash
+./scheduler
+```
+
+## Example Output
+
+```text
+BEFORE PRIORITIZATION
+
+==================== CURRENT QUEUE ====================
+1. [Eat-In] M Hot Tea  (waiting 200s, Waiting)
+2. [Mobile] M Iced Latte  (waiting 120s, Waiting)
+3. [Mobile] L Iced Coffee  (waiting 90s, Waiting)
+4. [Mobile] M Iced Frozen Coffee  (waiting 60s, Waiting)
+5. [Eat-In] L Iced Cold Brew  (waiting 45s, Waiting)
+6. [Drive-Thru] M Hot Latte  (waiting 30s, Waiting)
+=======================================================
+
+AFTER DYNAMIC PRIORITIZATION
+
+==================== CURRENT QUEUE ====================
+1. [Eat-In] M Hot Tea  (waiting 200s, Waiting)
+2. [Mobile] M Iced Latte  (waiting 120s, Waiting)
+3. [Mobile] L Iced Coffee  (waiting 90s, Waiting)
+4. [Mobile] M Iced Frozen Coffee  (waiting 60s, Waiting)
+5. [Drive-Thru] M Hot Latte  (waiting 30s, Waiting)
+6. [Eat-In] L Iced Cold Brew  (waiting 45s, Waiting)
+=======================================================
+```
+
+The exact ordering depends on each order's source, timestamp, status, and calculated urgency.
+
+## Current Limitations
+
+The current version is an early scheduling prototype.
+
+Current limitations include:
+
+* Orders are hard-coded in `main.cpp`
+* No real-time order generator
+* No interactive user input
+* No complete batch-construction algorithm
+* No equipment availability tracking
+* No estimated preparation times
+* No order cancellation or modification
+* No automatic archival of completed orders
+* No performance metrics
+* No graphical interface
+* No persistent storage
+* No sensor or STM32 integration
+* Source urgency rates are initial assumptions
+* Batching rules are not yet validated through customer discovery
+
+The project currently demonstrates scheduling logic rather than a production-ready service system.
+
+## Development Roadmap
+
+### Completed
+
+* [x] Identify the workflow bottleneck
+* [x] Define the `Order` data model
+* [x] Implement `QueueManager`
+* [x] Separate scheduling logic into `Scheduler`
+* [x] Implement dynamic urgency scoring
+* [x] Add aging to reduce starvation
+* [x] Implement dynamic prioritization
+* [x] Add chronological queue display
+* [x] Add deterministic tie-breaking
+* [x] Add initial `buildKey` compatibility logic
+* [x] Create a modular C++ structure
+* [x] Build and debug the terminal prototype
+
+### In Progress
+
+* [ ] Reject duplicate order IDs
+* [ ] Improve order lifecycle operations
+* [ ] Add automated tests
+* [ ] Add CMake build support
+* [ ] Implement process-aware batch selection
+
+### Planned
+
+* [ ] Add finite-state-machine order transitions
+* [ ] Generate orders at random intervals
+* [ ] Refresh the terminal display in real time
+* [ ] Track wait times and throughput
+* [ ] Compare FIFO, urgency-only, and batching strategies
+* [ ] Model equipment availability
+* [ ] Add estimated preparation times
+* [ ] Create a live terminal visualization
+* [ ] Add STM32-based sensor or equipment inputs
+* [ ] Explore a closed-loop embedded workflow assistant
+
+## Project Goal
+
+The long-term goal is to create a workflow-assistance system that reduces cognitive friction rather than replacing workers.
+
+By externalizing routine prioritization and task-sequencing decisions, the scheduler is intended to help workers focus more attention on production, communication, and customer service.
+
