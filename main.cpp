@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <ctime>
+#include <algorithm>
 
 int main() {
     time_t now = time(nullptr);
@@ -125,7 +126,32 @@ int main() {
 
     std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
 
-    queue.displayQueue(now);
+    queue.completeOrder(5);
+
+queue.getOrders()[1].status = Status::InProgress;
+
+std::sort(
+    queue.getOrders().begin(),
+    queue.getOrders().end(),
+    [](const Order& a, const Order& b) {
+        if (a.placedAt != b.placedAt) {
+            return a.placedAt < b.placedAt;
+        }
+
+        return a.id < b.id;
+    }
+);
+
+std::cout << "BEFORE PRIORITIZATION\n\n";
+queue.displayQueue(now);
+
+scheduler.prioritize(
+    queue.getOrders(),
+    now
+);
+
+std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
+queue.displayQueue(now);
 
     return 0;
 }
