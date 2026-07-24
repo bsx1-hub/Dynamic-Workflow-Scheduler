@@ -1,16 +1,15 @@
 // Dynamic Workflow Scheduler
-// Milestone 2: Dynamic order prioritization
+// Milestone 3: Queue-state operations and dynamic prioritization
 
 #include "Order.h"
 #include "QueueManager.h"
 #include "Scheduler.h"
 
-#include <iostream>
 #include <ctime>
-#include <algorithm>
+#include <iostream>
 
 int main() {
-    time_t now = time(nullptr);
+    const time_t now = time(nullptr);
 
     QueueManager queue;
     Scheduler scheduler;
@@ -116,42 +115,50 @@ int main() {
     });
 
     std::cout << "BEFORE PRIORITIZATION\n\n";
+    queue.displayQueue(now);
+
+    queue.prioritize(scheduler, now);
+
+    std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
+    queue.displayQueue(now);
+
+    std::cout << "\nSTARTING ORDER 5\n\n";
+
+    if (queue.startOrder(5)) {
+        std::cout << "Order 5 is now in progress.\n";
+    } else {
+        std::cout << "Could not start order 5.\n";
+    }
 
     queue.displayQueue(now);
 
-    scheduler.prioritize(
-        queue.getOrders(),
-        now
-    );
+    std::cout << "\nCOMPLETING ORDER 5\n\n";
 
-    std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
-
-    queue.completeOrder(5);
-
-queue.getOrders()[1].status = Status::InProgress;
-
-std::sort(
-    queue.getOrders().begin(),
-    queue.getOrders().end(),
-    [](const Order& a, const Order& b) {
-        if (a.placedAt != b.placedAt) {
-            return a.placedAt < b.placedAt;
-        }
-
-        return a.id < b.id;
+    if (queue.completeOrder(5)) {
+        std::cout << "Order 5 was completed.\n";
+    } else {
+        std::cout << "Could not complete order 5.\n";
     }
-);
 
-std::cout << "BEFORE PRIORITIZATION\n\n";
-queue.displayQueue(now);
+    queue.displayQueue(now);
 
-scheduler.prioritize(
-    queue.getOrders(),
-    now
-);
+    std::cout << "\nCANCELLING ORDER 10\n\n";
 
-std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
-queue.displayQueue(now);
+    if (queue.cancelOrder(10)) {
+        std::cout << "Order 10 was cancelled.\n";
+    } else {
+        std::cout << "Could not cancel order 10.\n";
+    }
+
+    queue.displayQueue(now);
+
+    std::cout << "\nWAITING ORDERS: "
+              << queue.getWaitingOrders().size()
+              << '\n';
+
+    std::cout << "ACTIVE ORDERS: "
+              << queue.getActiveOrders().size()
+              << '\n';
 
     return 0;
 }

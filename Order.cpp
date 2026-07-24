@@ -27,6 +27,9 @@ std::string statusName(Status status) {
 
         case Status::Complete:
             return "Complete";
+
+        case Status::Cancelled:
+            return "Cancelled";
     }
 
     return "?";

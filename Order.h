@@ -15,7 +15,8 @@ enum class Source {
 enum class Status {
     Waiting,
     InProgress,
-    Complete
+    Complete,
+    Cancelled
 };
 
 struct Order {

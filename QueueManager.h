@@ -8,18 +8,29 @@
 #include <vector>
 #include <ctime>
 
+class Scheduler;
+
 class QueueManager {
 private:
     std::vector<Order> orders;
 
+    Order* findMutableOrderById(int id);
+
 public:
-    void addOrder(const Order& order);
+    bool addOrder(const Order& order);
+    const Order* findOrderById(int id) const;
+    bool removeOrder(int id);
 
-    void completeOrder(int id);
+    bool startOrder(int id);
+    bool completeOrder(int id);
+    bool cancelOrder(int id);
 
+    std::vector<Order> getWaitingOrders() const;
+    std::vector<Order> getActiveOrders() const;
+
+    void prioritize(const Scheduler& scheduler, time_t now);
     void displayQueue(time_t now) const;
-
-    std::vector<Order>& getOrders();
 };
+
 
 #endif
