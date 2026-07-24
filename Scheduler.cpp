@@ -33,6 +33,32 @@ double Scheduler::urgency(
     return rate * secondsWaiting; //im modeling U = r * t
 }
 
+double Scheduler::calculateCompatibility(
+    const Order& anchor,
+    const Order& candidate
+) const {
+    if (anchor.buildKey.empty() ||
+        candidate.buildKey.empty()) {
+        return 0.0;
+    }
+
+    if (anchor.buildKey != candidate.buildKey) {
+        return 0.0;
+    }
+
+    double score = 40.0;
+
+    if (anchor.hot == candidate.hot) {
+        score += 10.0;
+    }
+
+    if (anchor.drink == candidate.drink) {
+        score += 10.0;
+    }
+
+    return score;
+}
+
 void Scheduler::prioritize(
     std::vector<Order>& orders,
     time_t now
@@ -66,24 +92,128 @@ void Scheduler::prioritize(
 }
 
 bool Scheduler::canBatch(
-    const Order& lead,
+    const Order& anchor,
     const Order& candidate,
     time_t now
 ) const {
-    const double BATCH_WINDOW = 20.0;
+    constexpr double MIN_COMPATIBILITY_SCORE = 40.0;
+    constexpr double MAX_BATCH_URGENCY_GAP = 20.0;
 
-    if (lead.buildKey != candidate.buildKey) {
+    if (anchor.id == candidate.id) {
         return false;
     }
 
-    double leadUrgency = urgency(lead, now);
-    double candidateUrgency = urgency(candidate, now);
-
-    if (candidateUrgency > leadUrgency) {
+    if (anchor.status != Status::Waiting ||
+        candidate.status != Status::Waiting) {
         return false;
     }
 
-    double urgencyGap = leadUrgency - candidateUrgency;
+    const double compatibility =
+        calculateCompatibility(anchor, candidate);
 
-    return urgencyGap <= BATCH_WINDOW;
+    if (compatibility < MIN_COMPATIBILITY_SCORE) {
+        return false;
+    }
+
+    const double anchorUrgency =
+        urgency(anchor, now);
+
+    const double candidateUrgency =
+        urgency(candidate, now);
+
+    if (candidateUrgency > anchorUrgency) {
+        return false;
+    }
+
+    const double urgencyGap =
+        anchorUrgency - candidateUrgency;
+
+    return urgencyGap <= MAX_BATCH_URGENCY_GAP;
 }
+
+BatchResult Scheduler::buildNextBatch(
+    std::vector<Order> waitingOrders,
+    time_t now
+) const {
+    constexpr std::size_t MAX_BATCH_SIZE = 3;
+    constexpr double MAX_BATCH_URGENCY_GAP = 20.0;
+
+    BatchResult result;
+
+    if (waitingOrders.empty()) {
+        return result;
+    }
+
+    prioritize(waitingOrders, now);
+
+    const Order anchor = waitingOrders.front();
+    result.orders.push_back(anchor);
+
+    const double anchorUrgency =
+        urgency(anchor, now);
+
+    std::vector<Order> compatibleCandidates;
+
+    for (std::size_t i = 1;
+         i < waitingOrders.size();
+         ++i) {
+        const Order& candidate = waitingOrders[i];
+
+        const double candidateUrgency =
+            urgency(candidate, now);
+
+        const double urgencyGap =
+            anchorUrgency - candidateUrgency;
+
+        if (urgencyGap > MAX_BATCH_URGENCY_GAP) {
+            break;
+        }
+
+        if (canBatch(anchor, candidate, now)) {
+            compatibleCandidates.push_back(candidate);
+        }
+    }
+
+    std::sort(
+        compatibleCandidates.begin(),
+        compatibleCandidates.end(),
+
+        [this, &anchor, now](
+            const Order& left,
+            const Order& right
+        ) {
+            const double leftCompatibility =
+                calculateCompatibility(anchor, left);
+
+            const double rightCompatibility =
+                calculateCompatibility(anchor, right);
+
+            if (leftCompatibility != rightCompatibility) {
+                return leftCompatibility > rightCompatibility;
+            }
+
+            const double leftUrgency =
+                urgency(left, now);
+
+            const double rightUrgency =
+                urgency(right, now);
+
+            if (leftUrgency != rightUrgency) {
+                return leftUrgency > rightUrgency;
+            }
+
+            return left.id < right.id;
+        }
+    );
+
+    for (const Order& candidate : compatibleCandidates) {
+        if (result.orders.size() >= MAX_BATCH_SIZE) {
+            break;
+        }
+
+        result.orders.push_back(candidate);
+    }
+
+    return result;
+}
+

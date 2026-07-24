@@ -1,5 +1,5 @@
 // Dynamic Workflow Scheduler
-// Milestone 3: Queue-state operations and dynamic prioritization
+// Milestone 4: Process-aware batch selection
 
 #include "Order.h"
 #include "QueueManager.h"
@@ -122,6 +122,43 @@ int main() {
     std::cout << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
     queue.displayQueue(now);
 
+    const BatchResult batch = scheduler.buildNextBatch(
+        queue.getWaitingOrders(),
+        now
+    );
+
+    std::cout << "\nNEXT RECOMMENDED BATCH\n\n";
+
+    if (batch.orders.empty()) {
+        std::cout << "No waiting orders are available.\n";
+    } else {
+        for (std::size_t i = 0; i < batch.orders.size(); ++i) {
+    const Order& order = batch.orders[i];
+
+    if (i == 0) {
+        std::cout << "Anchor: ";
+    } else {
+        std::cout
+            << "Compatible (score "
+            << scheduler.calculateCompatibility(
+                   batch.orders.front(),
+                   order
+               )
+            << "): ";
+    }
+
+    std::cout
+        << "Order " << order.id << " - "
+        << "[" << sourceName(order.source) << "] "
+        << order.size << " "
+        << (order.hot ? "Hot " : "Iced ")
+        << order.drink
+        << " - "
+        << order.buildKey
+        << '\n';
+}
+    }
+
     std::cout << "\nSTARTING ORDER 5\n\n";
 
     if (queue.startOrder(5)) {
@@ -160,5 +197,9 @@ int main() {
               << queue.getActiveOrders().size()
               << '\n';
 
+              std::cout << scheduler.calculateCompatibility(
+    queue.getWaitingOrders()[0],
+    queue.getWaitingOrders()[1]
+) << '\n';
     return 0;
 }
