@@ -1,10 +1,10 @@
-// defines what an order IS
+// Defines what an order is.
 
 #ifndef ORDER_H
 #define ORDER_H
 
-#include <string>
 #include <ctime>
+#include <string>
 
 enum class Source {
     DriveThru,
@@ -12,10 +12,11 @@ enum class Source {
     EatIn
 };
 
-enum class Status {
+enum class OrderStatus {
     Waiting,
+    Scheduled,
     InProgress,
-    Complete,
+    Completed,
     Cancelled
 };
 
@@ -27,10 +28,10 @@ struct Order {
     Source source;
     time_t placedAt;
     std::string buildKey;
-    Status status = Status::Waiting;
+    OrderStatus status = OrderStatus::Waiting;
 };
 
 std::string sourceName(Source source);
-std::string statusName(Status status);
+std::string statusName(OrderStatus status);
 
 #endif

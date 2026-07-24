@@ -1,12 +1,12 @@
-// owns/stores the orders
+// Owns order state and enforces lifecycle transitions.
 
 #ifndef QUEUE_MANAGER_H
 #define QUEUE_MANAGER_H
 
 #include "Order.h"
 
-#include <vector>
 #include <ctime>
+#include <vector>
 
 class Scheduler;
 
@@ -21,6 +21,7 @@ public:
     const Order* findOrderById(int id) const;
     bool removeOrder(int id);
 
+    bool scheduleOrder(int id);
     bool startOrder(int id);
     bool completeOrder(int id);
     bool cancelOrder(int id);
@@ -31,6 +32,5 @@ public:
     void prioritize(const Scheduler& scheduler, time_t now);
     void displayQueue(time_t now) const;
 };
-
 
 #endif

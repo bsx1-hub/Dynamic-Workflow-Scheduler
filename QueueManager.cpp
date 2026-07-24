@@ -26,7 +26,7 @@ bool QueueManager::addOrder(const Order& order) {
     }
 
     Order newOrder = order;
-    newOrder.status = Status::Waiting;
+    newOrder.status = OrderStatus::Waiting;
 
     orders.push_back(newOrder);
     return true;
@@ -65,15 +65,27 @@ bool QueueManager::removeOrder(int id) {
     return true;
 }
 
+bool QueueManager::scheduleOrder(int id) {
+    Order* order = findMutableOrderById(id);
+
+    if (order == nullptr ||
+        order->status != OrderStatus::Waiting) {
+        return false;
+    }
+
+    order->status = OrderStatus::Scheduled;
+    return true;
+}
+
 bool QueueManager::startOrder(int id) {
     Order* order = findMutableOrderById(id);
 
     if (order == nullptr ||
-        order->status != Status::Waiting) {
+        order->status != OrderStatus::Scheduled) {
         return false;
     }
 
-    order->status = Status::InProgress;
+    order->status = OrderStatus::InProgress;
     return true;
 }
 
@@ -81,24 +93,27 @@ bool QueueManager::completeOrder(int id) {
     Order* order = findMutableOrderById(id);
 
     if (order == nullptr ||
-        order->status != Status::InProgress) {
+        order->status != OrderStatus::InProgress) {
         return false;
     }
 
-    order->status = Status::Complete;
+    order->status = OrderStatus::Completed;
     return true;
 }
 
 bool QueueManager::cancelOrder(int id) {
     Order* order = findMutableOrderById(id);
 
-    if (order == nullptr ||
-        order->status == Status::Complete ||
-        order->status == Status::Cancelled) {
+    if (order == nullptr) {
         return false;
     }
 
-    order->status = Status::Cancelled;
+    if (order->status != OrderStatus::Waiting &&
+        order->status != OrderStatus::Scheduled) {
+        return false;
+    }
+
+    order->status = OrderStatus::Cancelled;
     return true;
 }
 
@@ -106,7 +121,7 @@ std::vector<Order> QueueManager::getWaitingOrders() const {
     std::vector<Order> waitingOrders;
 
     for (const Order& order : orders) {
-        if (order.status == Status::Waiting) {
+        if (order.status == OrderStatus::Waiting) {
             waitingOrders.push_back(order);
         }
     }
@@ -118,8 +133,9 @@ std::vector<Order> QueueManager::getActiveOrders() const {
     std::vector<Order> activeOrders;
 
     for (const Order& order : orders) {
-        if (order.status == Status::Waiting ||
-            order.status == Status::InProgress) {
+        if (order.status == OrderStatus::Waiting ||
+            order.status == OrderStatus::Scheduled ||
+            order.status == OrderStatus::InProgress) {
             activeOrders.push_back(order);
         }
     }
@@ -141,12 +157,12 @@ void QueueManager::displayQueue(time_t now) const {
     int position = 1;
 
     for (const Order& order : orders) {
-        if (order.status == Status::Complete ||
-            order.status == Status::Cancelled) {
+        if (order.status == OrderStatus::Completed ||
+            order.status == OrderStatus::Cancelled) {
             continue;
         }
 
-        long waited = static_cast<long>(
+        const long waited = static_cast<long>(
             difftime(now, order.placedAt)
         );
 

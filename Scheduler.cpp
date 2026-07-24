@@ -90,10 +90,10 @@ void Scheduler::prioritize(
 
         [this, now](const Order& a, const Order& b) {
             const bool aWaiting =
-                a.status == Status::Waiting;
+                a.status == OrderStatus::Waiting;
 
             const bool bWaiting =
-                b.status == Status::Waiting;
+                b.status == OrderStatus::Waiting;
 
             if (aWaiting != bWaiting) {
                 return aWaiting;
@@ -130,8 +130,8 @@ bool Scheduler::canBatch(
         return false;
     }
 
-    if (anchor.status != Status::Waiting ||
-        candidate.status != Status::Waiting) {
+    if (anchor.status != OrderStatus::Waiting ||
+        candidate.status != OrderStatus::Waiting) {
         return false;
     }
 
@@ -168,7 +168,7 @@ ScheduleDecision Scheduler::makeDecision(
     std::vector<Order> waitingOrders;
 
     for (const Order& order : orders) {
-        if (order.status == Status::Waiting) {
+        if (order.status == OrderStatus::Waiting) {
             waitingOrders.push_back(order);
         }
     }

@@ -217,6 +217,18 @@ int main() {
         }
     }
 
+    std::cout << "\nSCHEDULING ORDER 5\n\n";
+
+    if (queue.scheduleOrder(5)) {
+        std::cout
+            << "Order 5 is now scheduled.\n";
+    } else {
+        std::cout
+            << "Could not schedule order 5.\n";
+    }
+
+    queue.displayQueue(now);
+
     std::cout << "\nSTARTING ORDER 5\n\n";
 
     if (queue.startOrder(5)) {

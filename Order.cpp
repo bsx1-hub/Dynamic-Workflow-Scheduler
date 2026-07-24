@@ -1,4 +1,4 @@
-// handles order related helper functions. Order.cpp converts between computer and human reading the display.
+// Converts enum values into user-facing labels.
 
 #include "Order.h"
 
@@ -14,23 +14,26 @@ std::string sourceName(Source source) {
             return "Eat-In";
     }
 
-    return "?";
+    return "Unknown";
 }
 
-std::string statusName(Status status) {
+std::string statusName(OrderStatus status) {
     switch (status) {
-        case Status::Waiting:
+        case OrderStatus::Waiting:
             return "Waiting";
 
-        case Status::InProgress:
+        case OrderStatus::Scheduled:
+            return "Scheduled";
+
+        case OrderStatus::InProgress:
             return "In Progress";
 
-        case Status::Complete:
-            return "Complete";
+        case OrderStatus::Completed:
+            return "Completed";
 
-        case Status::Cancelled:
+        case OrderStatus::Cancelled:
             return "Cancelled";
     }
 
-    return "?";
+    return "Unknown";
 }

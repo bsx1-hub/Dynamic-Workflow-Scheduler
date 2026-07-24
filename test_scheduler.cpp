@@ -47,7 +47,7 @@ Order makeOrder(
     int id,
     Source source,
     std::time_t placedAt,
-    Status status = Status::Waiting
+    OrderStatus status = OrderStatus::Waiting
 ) {
     return {
         id,
@@ -69,7 +69,7 @@ Order makeDetailedOrder(
     Source source,
     std::time_t placedAt,
     const std::string& buildKey,
-    Status status = Status::Waiting
+    OrderStatus status = OrderStatus::Waiting
 ) {
     return {
         id,
@@ -169,13 +169,13 @@ void testCompletedOrdersAreExcluded() {
             1,
             Source::DriveThru,
             now - 10,
-            Status::Waiting
+            OrderStatus::Waiting
         ),
         makeOrder(
             2,
             Source::DriveThru,
             now - 500,
-            Status::Complete
+            OrderStatus::Completed
         )
     };
 
@@ -183,7 +183,7 @@ void testCompletedOrdersAreExcluded() {
 
     check(
         orders.front().id == 1 &&
-        orders.front().status == Status::Waiting,
+        orders.front().status == OrderStatus::Waiting,
         "Completed orders do not outrank waiting orders"
     );
 
@@ -205,6 +205,7 @@ void testCompletedOrdersAreExcluded() {
         )
     );
 
+    queue.scheduleOrder(11);
     queue.startOrder(11);
     queue.completeOrder(11);
 
@@ -509,7 +510,7 @@ void testBatchEligibility() {
             Source::Mobile,
             now - 100,
             "espresso",
-            Status::Complete
+            OrderStatus::Completed
         );
 
     const Order moreUrgentCandidate =
@@ -755,7 +756,7 @@ void testSchedulingDecisionIgnoresNonWaitingOrders() {
             Source::DriveThru,
             now - 50,
             "espresso",
-            Status::Waiting
+            OrderStatus::Waiting
         ),
         makeDetailedOrder(
             2,
@@ -764,7 +765,7 @@ void testSchedulingDecisionIgnoresNonWaitingOrders() {
             Source::DriveThru,
             now - 500,
             "espresso",
-            Status::Complete
+            OrderStatus::Completed
         ),
         makeDetailedOrder(
             3,
@@ -773,7 +774,7 @@ void testSchedulingDecisionIgnoresNonWaitingOrders() {
             Source::DriveThru,
             now - 400,
             "espresso",
-            Status::InProgress
+            OrderStatus::InProgress
         ),
         makeDetailedOrder(
             4,
@@ -782,7 +783,7 @@ void testSchedulingDecisionIgnoresNonWaitingOrders() {
             Source::DriveThru,
             now - 300,
             "espresso",
-            Status::Cancelled
+            OrderStatus::Cancelled
         )
     };
 
@@ -815,7 +816,7 @@ void testSchedulingDecisionHandlesNoWaitingOrders() {
             Source::DriveThru,
             now - 100,
             "espresso",
-            Status::Complete
+            OrderStatus::Completed
         ),
         makeDetailedOrder(
             2,
@@ -824,7 +825,7 @@ void testSchedulingDecisionHandlesNoWaitingOrders() {
             Source::Mobile,
             now - 100,
             "brew",
-            Status::Cancelled
+            OrderStatus::Cancelled
         )
     };
 
@@ -858,6 +859,198 @@ void testSchedulingDecisionHandlesNoWaitingOrders() {
     );
 }
 
+void testValidOrderLifecycleTransitions() {
+    const std::time_t now = 1'000;
+    QueueManager queue;
+
+    queue.addOrder(
+        makeDetailedOrder(
+            100,
+            "Latte",
+            true,
+            Source::DriveThru,
+            now - 30,
+            "espresso"
+        )
+    );
+
+    check(
+        queue.scheduleOrder(100),
+        "Waiting order can transition to Scheduled"
+    );
+
+    const Order* scheduled = queue.findOrderById(100);
+    check(
+        scheduled != nullptr &&
+        scheduled->status == OrderStatus::Scheduled,
+        "Scheduling updates the stored order status"
+    );
+
+    check(
+        queue.startOrder(100),
+        "Scheduled order can transition to InProgress"
+    );
+
+    check(
+        queue.completeOrder(100),
+        "InProgress order can transition to Completed"
+    );
+
+    const Order* completed = queue.findOrderById(100);
+    check(
+        completed != nullptr &&
+        completed->status == OrderStatus::Completed,
+        "Completion updates the stored order status"
+    );
+}
+
+void testValidCancellationTransitions() {
+    const std::time_t now = 1'000;
+    QueueManager queue;
+
+    queue.addOrder(
+        makeDetailedOrder(
+            101,
+            "Coffee",
+            false,
+            Source::Mobile,
+            now - 20,
+            "brew"
+        )
+    );
+
+    queue.addOrder(
+        makeDetailedOrder(
+            102,
+            "Cappuccino",
+            true,
+            Source::DriveThru,
+            now - 20,
+            "espresso"
+        )
+    );
+
+    check(
+        queue.cancelOrder(101),
+        "Waiting order can transition to Cancelled"
+    );
+
+    check(
+        queue.scheduleOrder(102) &&
+        queue.cancelOrder(102),
+        "Scheduled order can transition to Cancelled"
+    );
+}
+
+void testInvalidOrderLifecycleTransitionsFailSafely() {
+    const std::time_t now = 1'000;
+    QueueManager queue;
+
+    queue.addOrder(
+        makeDetailedOrder(
+            103,
+            "Latte",
+            true,
+            Source::DriveThru,
+            now - 30,
+            "espresso"
+        )
+    );
+
+    check(
+        !queue.startOrder(103),
+        "Waiting order cannot skip Scheduled and enter InProgress"
+    );
+
+    check(
+        !queue.completeOrder(103),
+        "Waiting order cannot transition directly to Completed"
+    );
+
+    queue.scheduleOrder(103);
+    queue.startOrder(103);
+
+    check(
+        !queue.cancelOrder(103),
+        "InProgress order cannot be cancelled"
+    );
+
+    queue.completeOrder(103);
+
+    check(
+        !queue.startOrder(103),
+        "Completed order cannot transition to InProgress"
+    );
+
+    check(
+        !queue.scheduleOrder(103),
+        "Completed order cannot transition to Scheduled"
+    );
+
+    queue.addOrder(
+        makeDetailedOrder(
+            104,
+            "Tea",
+            true,
+            Source::EatIn,
+            now - 10,
+            "brew"
+        )
+    );
+    queue.cancelOrder(104);
+
+    check(
+        !queue.scheduleOrder(104),
+        "Cancelled order cannot transition to Scheduled"
+    );
+
+    check(
+        !queue.startOrder(104),
+        "Cancelled order cannot transition to InProgress"
+    );
+}
+
+void testScheduledOrdersAreNotRescheduled() {
+    const std::time_t now = 1'000;
+    const Scheduler scheduler;
+    QueueManager queue;
+
+    queue.addOrder(
+        makeDetailedOrder(
+            105,
+            "Latte",
+            true,
+            Source::DriveThru,
+            now - 100,
+            "espresso"
+        )
+    );
+
+    queue.addOrder(
+        makeDetailedOrder(
+            106,
+            "Coffee",
+            false,
+            Source::Mobile,
+            now - 50,
+            "brew"
+        )
+    );
+
+    queue.scheduleOrder(105);
+
+    const ScheduleDecision decision =
+        scheduler.makeDecision(
+            queue.getActiveOrders(),
+            now
+        );
+
+    check(
+        decision.anchorOrderId == 106,
+        "Scheduler selects only Waiting orders as new anchors"
+    );
+}
+
 } // namespace
 
 int main() {
@@ -875,6 +1068,10 @@ int main() {
     testAnchorOnlyDecision();
     testSchedulingDecisionIgnoresNonWaitingOrders();
     testSchedulingDecisionHandlesNoWaitingOrders();
+    testValidOrderLifecycleTransitions();
+    testValidCancellationTransitions();
+    testInvalidOrderLifecycleTransitionsFailSafely();
+    testScheduledOrdersAreNotRescheduled();
 
     std::cout
         << '\n'
