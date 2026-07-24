@@ -1,9 +1,30 @@
-//brain of the project
+// Brain of the project: contains the scheduling algorithms.
 
 #include "Scheduler.h"
 
 #include <algorithm>
 #include <ctime>
+
+namespace {
+
+// Converts an internal build key into a worker-facing station name.
+std::string equipmentName(const std::string& buildKey) {
+    if (buildKey == "espresso") {
+        return "Espresso Station";
+    }
+
+    if (buildKey == "brew") {
+        return "Brewing Station";
+    }
+
+    if (buildKey == "frozen") {
+        return "Blender Station";
+    }
+
+    return "Other Station";
+}
+
+}
 
 double Scheduler::urgency(
     const Order& order,
@@ -25,12 +46,12 @@ double Scheduler::urgency(
             break;
     }
 
-    double secondsWaiting = std::max( // compiles because of <algorithm>
+    const double secondsWaiting = std::max(
         0.0,
         difftime(now, order.placedAt)
     );
 
-    return rate * secondsWaiting; //im modeling U = r * t
+    return rate * secondsWaiting;
 }
 
 double Scheduler::calculateCompatibility(
@@ -68,15 +89,21 @@ void Scheduler::prioritize(
         orders.end(),
 
         [this, now](const Order& a, const Order& b) {
-            const bool aWaiting = a.status == Status::Waiting;
-            const bool bWaiting = b.status == Status::Waiting;
+            const bool aWaiting =
+                a.status == Status::Waiting;
+
+            const bool bWaiting =
+                b.status == Status::Waiting;
 
             if (aWaiting != bWaiting) {
                 return aWaiting;
             }
 
-            double aUrgency = urgency(a, now);
-            double bUrgency = urgency(b, now);
+            const double aUrgency =
+                urgency(a, now);
+
+            const double bUrgency =
+                urgency(b, now);
 
             if (aUrgency != bUrgency) {
                 return aUrgency > bUrgency;
@@ -131,26 +158,36 @@ bool Scheduler::canBatch(
     return urgencyGap <= MAX_BATCH_URGENCY_GAP;
 }
 
-BatchResult Scheduler::buildNextBatch(
-    std::vector<Order> waitingOrders,
-    time_t now
+ScheduleDecision Scheduler::makeDecision(
+    const std::vector<Order>& orders,
+    time_t now,
+    std::size_t maxBatchSize
 ) const {
-    constexpr std::size_t MAX_BATCH_SIZE = 3;
-    constexpr double MAX_BATCH_URGENCY_GAP = 20.0;
+    ScheduleDecision decision;
 
-    BatchResult result;
+    std::vector<Order> waitingOrders;
+
+    for (const Order& order : orders) {
+        if (order.status == Status::Waiting) {
+            waitingOrders.push_back(order);
+        }
+    }
 
     if (waitingOrders.empty()) {
-        return result;
+        return decision;
     }
 
     prioritize(waitingOrders, now);
 
-    const Order anchor = waitingOrders.front();
-    result.orders.push_back(anchor);
+    const Order& anchor = waitingOrders.front();
 
-    const double anchorUrgency =
-        urgency(anchor, now);
+    decision.anchorOrderId = anchor.id;
+    decision.equipment = equipmentName(anchor.buildKey);
+    decision.anchorUrgency = urgency(anchor, now);
+
+    if (maxBatchSize <= 1) {
+        return decision;
+    }
 
     std::vector<Order> compatibleCandidates;
 
@@ -158,16 +195,6 @@ BatchResult Scheduler::buildNextBatch(
          i < waitingOrders.size();
          ++i) {
         const Order& candidate = waitingOrders[i];
-
-        const double candidateUrgency =
-            urgency(candidate, now);
-
-        const double urgencyGap =
-            anchorUrgency - candidateUrgency;
-
-        if (urgencyGap > MAX_BATCH_URGENCY_GAP) {
-            break;
-        }
 
         if (canBatch(anchor, candidate, now)) {
             compatibleCandidates.push_back(candidate);
@@ -189,7 +216,8 @@ BatchResult Scheduler::buildNextBatch(
                 calculateCompatibility(anchor, right);
 
             if (leftCompatibility != rightCompatibility) {
-                return leftCompatibility > rightCompatibility;
+                return leftCompatibility >
+                       rightCompatibility;
             }
 
             const double leftUrgency =
@@ -207,13 +235,15 @@ BatchResult Scheduler::buildNextBatch(
     );
 
     for (const Order& candidate : compatibleCandidates) {
-        if (result.orders.size() >= MAX_BATCH_SIZE) {
+        if (decision.batchedOrderIds.size()
+            >= maxBatchSize - 1) {
             break;
         }
 
-        result.orders.push_back(candidate);
+        decision.batchedOrderIds.push_back(
+            candidate.id
+        );
     }
 
-    return result;
+    return decision;
 }
-
