@@ -572,6 +572,41 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g test_scheduler.cpp Order.cpp QueueMan
 .\scheduler_tests.exe
 ```
 
+### Run with a Fixed Random Seed
+
+The scheduler accepts an optional `--seed` argument for repeatable simulations.
+
+```powershell
+.\scheduler.exe --seed 42
+```
+
+Using the same seed reproduces the same generated order stream and simulation results, which makes debugging and strategy comparisons more consistent.
+
+To generate a different scenario, use another seed:
+
+```powershell
+.\scheduler.exe --seed 100
+```
+
+Running the program without an argument uses the default seed:
+
+```powershell
+.\scheduler.exe
+```
+
+Default:
+
+```text
+Random seed: 42
+```
+
+Invalid seed values are rejected safely:
+
+```powershell
+.\scheduler.exe --seed hello
+```
+
+
 ## Testing
 
 The automated test suite covers:
@@ -602,6 +637,13 @@ The automated test suite covers:
 
 All current scheduler, batching, prioritization, and lifecycle tests pass successfully.
 
+The command-line seed option was also verified by:
+
+* Running the simulation multiple times with seed `42`
+* Confirming identical generated orders and metrics
+* Running the simulation with a different seed
+* Confirming that a different order stream was generated
+* Confirming that invalid seed input is rejected safely
 
 ## Current Limitations
 
@@ -654,6 +696,9 @@ Current limitations include:
 * [x] Compare both strategies using the same order stream
 * [x] Measure wait time and equipment operations
 * [x] Document Week 3 simulation results
+* [x] Add command-line random seed support
+* [x] Make simulation runs reproducible
+* [x] Add safe handling for invalid seed input
 
 ### In Progress
 
