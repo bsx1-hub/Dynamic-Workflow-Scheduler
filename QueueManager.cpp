@@ -128,6 +128,18 @@ std::vector<Order> QueueManager::getActiveOrders() const {
     return activeOrders;
 }
 
+std::size_t QueueManager::completedCount() const {
+    return static_cast<std::size_t>(
+        std::count_if(
+            orders.cbegin(),
+            orders.cend(),
+            [](const Order& order) {
+                return order.status == Status::Complete;
+            }
+        )
+    );
+}
+
 void QueueManager::prioritize(
     const Scheduler& scheduler,
     time_t now
