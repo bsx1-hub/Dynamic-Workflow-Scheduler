@@ -373,6 +373,38 @@ Compatible candidates are ranked by:
 2. Higher urgency
 3. Lower order ID
 
+
+## Testing
+
+The automated test suite covers:
+
+* Source urgency rates
+* Aging and starvation prevention
+* Empty queue handling
+* Future timestamp handling
+* Invalid source handling
+* Deterministic tie-breaking
+* Compatibility scoring
+* Batch eligibility
+* Priority-inversion protection
+* Batch-size limits
+* Empty scheduling decisions
+* Completed order exclusion
+* Cancelled order exclusion
+* In-progress order exclusion
+* Duplicate order ID rejection
+* Valid lifecycle transitions
+* Invalid lifecycle transition rejection
+
+### Test Results
+
+```text
+55/55 tests passed
+```
+
+All current scheduler, batching, prioritization, and lifecycle tests pass successfully.
+
+
 ### Priority Protection
 
 A candidate is rejected when:
