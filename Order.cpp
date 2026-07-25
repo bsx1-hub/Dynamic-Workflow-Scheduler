@@ -17,21 +17,18 @@ std::string sourceName(Source source) {
     return "Unknown";
 }
 
-std::string statusName(OrderStatus status) {
+std::string statusName(Status status) {
     switch (status) {
-        case OrderStatus::Waiting:
+        case Status::Waiting:
             return "Waiting";
 
-        case OrderStatus::Scheduled:
-            return "Scheduled";
-
-        case OrderStatus::InProgress:
+        case Status::InProgress:
             return "In Progress";
 
-        case OrderStatus::Completed:
-            return "Completed";
+        case Status::Complete:
+            return "Complete";
 
-        case OrderStatus::Cancelled:
+        case Status::Cancelled:
             return "Cancelled";
     }
 

@@ -12,11 +12,10 @@ enum class Source {
     EatIn
 };
 
-enum class OrderStatus {
+enum class Status {
     Waiting,
-    Scheduled,
     InProgress,
-    Completed,
+    Complete,
     Cancelled
 };
 
@@ -28,10 +27,12 @@ struct Order {
     Source source;
     time_t placedAt;
     std::string buildKey;
-    OrderStatus status = OrderStatus::Waiting;
+    Status status = Status::Waiting;
+
+    int estimatedPrepSeconds = 0;
 };
 
 std::string sourceName(Source source);
-std::string statusName(OrderStatus status);
+std::string statusName(Status status);
 
 #endif

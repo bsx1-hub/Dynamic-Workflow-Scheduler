@@ -1,279 +1,342 @@
-// Dynamic Workflow Scheduler
-// Milestone 4: Process-aware scheduling decisions
-
 #include "Order.h"
-#include "QueueManager.h"
-#include "Scheduler.h"
+#include "OrderGenerator.h"
+#include "EquipmentManager.h"
+#include "SimulationRunner.h"
 
 #include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <vector>
 
-int main() {
-    const time_t now = time(nullptr);
-
-    QueueManager queue;
-    Scheduler scheduler;
-
-    queue.addOrder({
-        1,
-        "Latte",
-        "M",
-        true,
-        Source::DriveThru,
-        now - 30,
-        "espresso"
-    });
-
-    queue.addOrder({
-        2,
-        "Coffee",
-        "L",
-        false,
-        Source::Mobile,
-        now - 90,
-        "brew"
-    });
-
-    queue.addOrder({
-        3,
-        "Espresso",
-        "S",
-        true,
-        Source::DriveThru,
-        now - 10,
-        "espresso"
-    });
-
-    queue.addOrder({
-        4,
-        "Frozen Coffee",
-        "M",
-        false,
-        Source::Mobile,
-        now - 60,
-        "frozen"
-    });
-
-    queue.addOrder({
-        5,
-        "Tea",
-        "M",
-        true,
-        Source::EatIn,
-        now - 200,
-        "brew"
-    });
-
-    queue.addOrder({
-        6,
-        "Cold Brew",
-        "L",
-        false,
-        Source::EatIn,
-        now - 45,
-        "brew"
-    });
-
-    queue.addOrder({
-        7,
-        "Cappuccino",
-        "S",
-        true,
-        Source::Mobile,
-        now - 20,
-        "espresso"
-    });
-
-    queue.addOrder({
-        8,
-        "Frozen Matcha",
-        "L",
-        false,
-        Source::DriveThru,
-        now - 5,
-        "frozen"
-    });
-
-    queue.addOrder({
-        9,
-        "Latte",
-        "M",
-        false,
-        Source::Mobile,
-        now - 120,
-        "espresso"
-    });
-
-    queue.addOrder({
-        10,
-        "Chocolate",
-        "S",
-        true,
-        Source::EatIn,
-        now - 15,
-        "other"
-    });
-
-    std::cout << "BEFORE PRIORITIZATION\n\n";
-    queue.displayQueue(now);
-
-    queue.prioritize(scheduler, now);
-
-    std::cout
-        << "\nAFTER DYNAMIC PRIORITIZATION\n\n";
-
-    queue.displayQueue(now);
-
-    const std::vector<Order> waitingOrders =
-        queue.getWaitingOrders();
-
-    const ScheduleDecision decision =
-        scheduler.makeDecision(
-            waitingOrders,
-            now
-        );
-
-    std::cout << "\nNEXT ACTION\n\n";
-
-    if (decision.anchorOrderId == -1) {
-        std::cout
-            << "No waiting orders are available.\n";
-    } else {
-        const Order* anchor =
-            queue.findOrderById(
-                decision.anchorOrderId
+void displayGeneratedOrders(
+    const std::vector<Order>& orders,
+    std::time_t scenarioStart
+) {
+    for (const Order& order : orders) {
+        const long arrivalOffset =
+            static_cast<long>(
+                std::difftime(
+                    order.placedAt,
+                    scenarioStart
+                )
             );
 
         std::cout
-            << "Equipment: "
-            << decision.equipment
+            << "#"
+            << order.id
+            << " | +"
+            << arrivalOffset
+            << "s | "
+            << sourceName(order.source)
+            << " | "
+            << order.size
+            << " "
+            << (order.hot ? "Hot" : "Iced")
+            << " "
+            << order.drink
+            << " | buildKey: "
+            << order.buildKey
+            << " | estimated preparation: "
+            << order.estimatedPrepSeconds
+            << "s\n";
+    }
+}
+
+int fixedBusyTicks(EquipmentType type) {
+    switch (type) {
+        case EquipmentType::Espresso:
+            return 3;
+
+        case EquipmentType::Brew:
+            return 2;
+
+        case EquipmentType::Frozen:
+            return 4;
+
+        case EquipmentType::Other:
+            return 1;
+    }
+
+    return 1;
+}
+
+void runEquipmentSimulation(
+    const std::vector<Order>& orders
+) {
+    EquipmentManager equipmentManager;
+
+    std::cout
+        << "\n================ EQUIPMENT SIMULATION ================\n";
+
+    equipmentManager.displayEquipment();
+
+    int tick = 0;
+
+    for (const Order& order : orders) {
+        std::cout
+            << "\nTICK "
+            << tick
             << '\n';
 
-        std::cout
-            << "Anchor Order: #"
-            << decision.anchorOrderId;
+        const EquipmentType requiredEquipment =
+            equipmentTypeFromBuildKey(
+                order.buildKey
+            );
 
-        if (anchor != nullptr) {
+        std::cout
+            << "Order #"
+            << order.id
+            << " requires "
+            << equipmentTypeName(
+                requiredEquipment
+            )
+            << ".\n";
+
+        if (equipmentManager.isAvailable(
+                requiredEquipment
+            )) {
+            const int busyTicks =
+                fixedBusyTicks(
+                    requiredEquipment
+                );
+
+            equipmentManager.setBusy(
+                requiredEquipment,
+                busyTicks
+            );
+
             std::cout
-                << " "
-                << sourceName(anchor->source)
-                << " "
-                << anchor->drink;
-        }
-
-        std::cout
-            << "\nAnchor Urgency: "
-            << std::fixed
-            << std::setprecision(1)
-            << decision.anchorUrgency
-            << '\n';
-
-        std::cout << "Batch With:\n";
-
-        if (decision.batchedOrderIds.empty()) {
-            std::cout << "- None\n";
+                << "Started Order #"
+                << order.id
+                << ". Station will be busy for "
+                << busyTicks
+                << " ticks.\n";
         } else {
-            for (int orderId :
-                 decision.batchedOrderIds) {
-                const Order* batchedOrder =
-                    queue.findOrderById(orderId);
+            const Equipment& equipment =
+                equipmentManager.getEquipment(
+                    requiredEquipment
+                );
 
-                if (batchedOrder == nullptr) {
-                    continue;
-                }
-
-                std::cout
-                    << "- #"
-                    << batchedOrder->id
-                    << " "
-                    << sourceName(
-                           batchedOrder->source
-                       )
-                    << " "
-                    << batchedOrder->drink;
-
-                if (anchor != nullptr) {
-                    std::cout
-                        << " (compatibility "
-                        << scheduler
-                               .calculateCompatibility(
-                                   *anchor,
-                                   *batchedOrder
-                               )
-                        << ")";
-                }
-
-                std::cout << '\n';
-            }
-        }
-
-        if (anchor != nullptr) {
             std::cout
-                << "Reason: shared "
-                << anchor->buildKey
-                << " preparation\n";
+                << "Order #"
+                << order.id
+                << " must wait. "
+                << equipmentTypeName(
+                    requiredEquipment
+                )
+                << " is busy for "
+                << equipment.busyTicksRemaining
+                << " more tick";
+
+            if (equipment.busyTicksRemaining != 1) {
+                std::cout << 's';
+            }
+
+            std::cout << ".\n";
         }
+
+        equipmentManager.displayEquipment();
+
+        equipmentManager.update();
+        ++tick;
     }
 
-    std::cout << "\nSCHEDULING ORDER 5\n\n";
+    while (
+        !equipmentManager.isAvailable(
+            EquipmentType::Espresso
+        ) ||
+        !equipmentManager.isAvailable(
+            EquipmentType::Brew
+        ) ||
+        !equipmentManager.isAvailable(
+            EquipmentType::Frozen
+        ) ||
+        !equipmentManager.isAvailable(
+            EquipmentType::Other
+        )
+    ) {
+        std::cout
+            << "\nTICK "
+            << tick
+            << " - no new order\n";
 
-    if (queue.scheduleOrder(5)) {
-        std::cout
-            << "Order 5 is now scheduled.\n";
-    } else {
-        std::cout
-            << "Could not schedule order 5.\n";
+        equipmentManager.update();
+        equipmentManager.displayEquipment();
+
+        ++tick;
     }
-
-    queue.displayQueue(now);
-
-    std::cout << "\nSTARTING ORDER 5\n\n";
-
-    if (queue.startOrder(5)) {
-        std::cout
-            << "Order 5 is now in progress.\n";
-    } else {
-        std::cout
-            << "Could not start order 5.\n";
-    }
-
-    queue.displayQueue(now);
-
-    std::cout << "\nCOMPLETING ORDER 5\n\n";
-
-    if (queue.completeOrder(5)) {
-        std::cout
-            << "Order 5 was completed.\n";
-    } else {
-        std::cout
-            << "Could not complete order 5.\n";
-    }
-
-    queue.displayQueue(now);
-
-    std::cout << "\nCANCELLING ORDER 10\n\n";
-
-    if (queue.cancelOrder(10)) {
-        std::cout
-            << "Order 10 was cancelled.\n";
-    } else {
-        std::cout
-            << "Could not cancel order 10.\n";
-    }
-
-    queue.displayQueue(now);
 
     std::cout
-        << "\nWAITING ORDERS: "
-        << queue.getWaitingOrders().size()
+        << "\nAll equipment is available.\n";
+}
+
+void displayMetrics(
+    const SimulationMetrics& metrics
+) {
+    std::cout
+        << "\n============================================\n"
+        << metrics.strategyName
+        << "\n============================================\n";
+
+    std::cout
+        << "Orders completed: "
+        << metrics.ordersCompleted
         << '\n';
 
     std::cout
-        << "ACTIVE ORDERS: "
-        << queue.getActiveOrders().size()
+        << "Total simulation ticks: "
+        << metrics.totalTicks
         << '\n';
+
+    std::cout
+        << "Average wait: "
+        << std::fixed
+        << std::setprecision(2)
+        << metrics.averageWaitTicks
+        << " ticks\n";
+
+    std::cout
+        << "Maximum wait: "
+        << metrics.maximumWaitTicks
+        << " ticks\n";
+
+    std::cout
+        << "Equipment operations: "
+        << metrics.equipmentOperations
+        << '\n';
+
+    std::cout
+        << "Orders pulled into batches: "
+        << metrics.ordersBatched
+        << '\n';
+}
+
+void displayComparison(
+    const SimulationMetrics& fifo,
+    const SimulationMetrics& dynamic
+) {
+    std::cout
+        << "\n================ IMPROVEMENT SUMMARY ================\n";
+
+    const double waitReduction =
+        fifo.averageWaitTicks -
+        dynamic.averageWaitTicks;
+
+    const int tickReduction =
+        fifo.totalTicks -
+        dynamic.totalTicks;
+
+    const int operationReduction =
+        fifo.equipmentOperations -
+        dynamic.equipmentOperations;
+
+    std::cout
+        << "Average wait reduction: "
+        << std::fixed
+        << std::setprecision(2)
+        << waitReduction
+        << " ticks\n";
+
+    std::cout
+        << "Simulation tick reduction: "
+        << tickReduction
+        << '\n';
+
+    std::cout
+        << "Equipment operation reduction: "
+        << operationReduction
+        << '\n';
+
+    if (
+        dynamic.averageWaitTicks <
+        fifo.averageWaitTicks
+    ) {
+        std::cout
+            << "Result: Dynamic scheduling reduced "
+            << "average waiting time.\n";
+    } else if (
+        dynamic.averageWaitTicks >
+        fifo.averageWaitTicks
+    ) {
+        std::cout
+            << "Result: FIFO produced a lower "
+            << "average waiting time in this run.\n";
+    } else {
+        std::cout
+            << "Result: Both strategies produced "
+            << "the same average waiting time.\n";
+    }
+}
+
+int main() {
+    const std::time_t scenarioStart =
+        std::time(nullptr);
+
+    // Fixed seed produces repeatable results.
+    OrderGenerator generator(42);
+
+    const std::vector<Order> normalOrders =
+        generator.generateScenario(
+            DemandScenario::Normal,
+            10,
+            scenarioStart
+        );
+
+    std::cout
+        << "================ NORMAL DEMAND ================\n";
+
+    displayGeneratedOrders(
+        normalOrders,
+        scenarioStart
+    );
+
+    const std::time_t rushStart =
+        scenarioStart + 600;
+
+    const std::vector<Order> rushOrders =
+        generator.generateScenario(
+            DemandScenario::Rush,
+            20,
+            rushStart
+        );
+
+    std::cout
+        << "\n================ RUSH DEMAND ==================\n";
+
+    displayGeneratedOrders(
+        rushOrders,
+        rushStart
+    );
+
+    SimulationRunner simulationRunner;
+
+    const SimulationMetrics fifoMetrics =
+        simulationRunner.run(
+            rushOrders,
+            SchedulingStrategy::FIFO,
+            rushStart
+        );
+
+    const SimulationMetrics dynamicMetrics =
+        simulationRunner.run(
+            rushOrders,
+            SchedulingStrategy::DynamicBatching,
+            rushStart
+        );
+
+    std::cout
+        << "\n================ STRATEGY COMPARISON ================\n";
+
+    displayMetrics(fifoMetrics);
+    displayMetrics(dynamicMetrics);
+
+    displayComparison(
+        fifoMetrics,
+        dynamicMetrics
+    );
+
+    // Optional standalone equipment demonstration.
+    runEquipmentSimulation(rushOrders);
 
     return 0;
 }
