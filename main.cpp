@@ -4,8 +4,10 @@
 #include "SimulationRunner.h"
 
 #include <ctime>
+#include <exception>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <vector>
 
 void displayGeneratedOrders(
@@ -268,12 +270,99 @@ void displayComparison(
     }
 }
 
-int main() {
+bool parseSeed(
+    int argc,
+    char* argv[],
+    unsigned int& seed
+) {
+    seed = 42;
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument =
+            argv[index];
+
+        if (argument == "--seed") {
+            if (index + 1 >= argc) {
+                std::cerr
+                    << "Error: --seed requires "
+                    << "a non-negative integer.\n";
+
+                return false;
+            }
+
+            const std::string seedText =
+                argv[++index];
+
+            try {
+                std::size_t charactersRead = 0;
+
+                const unsigned long parsedSeed =
+                    std::stoul(
+                        seedText,
+                        &charactersRead
+                    );
+
+                if (
+                    charactersRead !=
+                    seedText.size()
+                ) {
+                    throw std::invalid_argument(
+                        "Seed contains invalid characters"
+                    );
+                }
+
+                seed =
+                    static_cast<unsigned int>(
+                        parsedSeed
+                    );
+            } catch (const std::exception&) {
+                std::cerr
+                    << "Error: invalid seed value: "
+                    << seedText
+                    << '\n';
+
+                return false;
+            }
+        } else {
+            std::cerr
+                << "Error: unknown argument: "
+                << argument
+                << '\n';
+
+            std::cerr
+                << "Usage: .\\scheduler.exe "
+                << "[--seed NUMBER]\n";
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
+int main(
+    int argc,
+    char* argv[]
+) {
+    unsigned int seed = 42;
+
+    if (!parseSeed(
+            argc,
+            argv,
+            seed
+        )) {
+        return 1;
+    }
+
+    std::cout
+        << "Random seed: "
+        << seed
+        << "\n\n";
+
     const std::time_t scenarioStart =
         std::time(nullptr);
 
-    // Fixed seed produces repeatable results.
-    OrderGenerator generator(42);
+    OrderGenerator generator(seed);
 
     const std::vector<Order> normalOrders =
         generator.generateScenario(
@@ -335,7 +424,6 @@ int main() {
         dynamicMetrics
     );
 
-    // Optional standalone equipment demonstration.
     runEquipmentSimulation(rushOrders);
 
     return 0;
