@@ -396,15 +396,6 @@ The automated test suite covers:
 * Valid lifecycle transitions
 * Invalid lifecycle transition rejection
 
-### Test Results
-
-```text
-55/55 tests passed
-```
-
-All current scheduler, batching, prioritization, and lifecycle tests pass successfully.
-
-
 ### Priority Protection
 
 A candidate is rejected when:
@@ -602,6 +593,15 @@ The automated test suite covers:
 * Duplicate order ID rejection
 * Valid lifecycle transitions
 * Invalid lifecycle transition rejection
+
+### Test Results
+
+```text
+55/55 tests passed
+```
+
+All current scheduler, batching, prioritization, and lifecycle tests pass successfully.
+
 
 ## Current Limitations
 
