@@ -1,267 +1,98 @@
 # Dynamic Workflow Scheduler
 
-A modular C++ workflow-scheduling system designed to reduce cognitive load and decision latency in high-volume service environments.
-
-## Project Overview
-
-The Dynamic Workflow Scheduler is a C++ prototype inspired by workflow bottlenecks I observed while working in a high-volume coffee shop environment.
-
-During rush periods, workers must process several incoming order streams, recognize urgent tickets, identify similar preparation tasks, monitor equipment availability, and continuously decide what should happen next.
-
-The primary bottleneck is not always the physical speed of production. It can also be the cognitive overhead created by repeatedly sorting, prioritizing, batching, and reorganizing work while completing physical tasks.
-
-This project explores how a software scheduling layer can support workers by:
-
-* Dynamically prioritizing incoming orders
-* Preventing lower-priority orders from being indefinitely neglected
-* Identifying compatible preparation tasks
-* Tracking equipment availability
-* Recommending a concrete next action
-* Displaying workflow state through a live terminal dashboard
-* Supporting manual order and lifecycle commands
-* Comparing scheduling strategies through repeatable simulation
+A real-time C++ workflow scheduler that reduces worker decision latency by prioritizing competing orders, batching compatible tasks, and exposing the next best action through a live terminal interface.
 
 ## Problem Statement
 
-Service workers may receive orders from several concurrent sources:
+High-volume service workers often receive several order streams at once, including drive-thru, mobile, and in-store orders. During a rush, workers must continuously:
 
-* Drive-thru
-* Mobile ordering
-* Front-counter or eat-in customers
+- Decide which order is most urgent
+- Track how long each customer has waited
+- Recognize tasks that share preparation steps
+- Monitor equipment availability
+- Remember which orders are waiting, active, or complete
+- Reorganize the workflow whenever conditions change
 
-Each source may have a different operational priority. Orders may also require different equipment or preparation processes, including:
+The bottleneck is not always the physical speed of preparation. It can also be the cognitive overhead created by repeatedly sorting information and deciding what should happen next.
 
-* Espresso station
-* Brewing station
-* Frozen-drink station
-* Other preparation stations
+The Dynamic Workflow Scheduler treats this workflow as a real-time scheduling problem rather than a simple first-in, first-out queue.
 
-Workers must mentally balance:
+## System Overview
 
-1. Service urgency
-2. Wait time
-3. Process similarity
-4. Order state
-5. Equipment availability
-6. Estimated preparation time
+Each incoming order is represented as structured data containing its source, timestamp, preparation process, estimated duration, and lifecycle state.
 
-A strict first-in, first-out queue does not account for all these workflow constraints.
+The scheduler:
 
-A rigid priority rule such as:
+1. Calculates the urgency of each waiting order.
+2. Selects the highest-urgency order as the anchor.
+3. Searches for compatible orders that share its preparation process.
+4. Protects more urgent work from being displaced by batching.
+5. Tracks equipment availability.
+6. Recommends the next action.
+7. Refreshes a color-coded terminal dashboard when the system state changes.
+
+The project includes both a repeatable simulation environment and an interactive manual-control mode.
+
+## Demo
+
+Add the project GIF to the repository at:
 
 ```text
-Drive-Thru > Mobile > Eat-In
+docs/images/live-scheduler-demo.gif
 ```
 
-can also cause lower-priority orders to wait indefinitely during sustained demand.
+Then GitHub will display it here:
 
-The Dynamic Workflow Scheduler treats the workflow as a real-time scheduling problem rather than a simple queue.
+![Dynamic Workflow Scheduler live terminal demonstration](docs/images/live-scheduler-demo.gif)
 
-## Current Features
+The demonstration shows the scheduler recalculating priorities, starting and completing batches, tracking equipment status, and updating queue metrics in real time.
 
-### Scheduling
+## Features
 
-* Structured order modeling
-* Drive-thru, mobile, and eat-in order sources
-* Dynamic urgency scoring
-* Aging to reduce starvation
-* Deterministic priority tie-breaking
-* Process-aware compatibility scoring
-* Equipment-based batch selection
-* Maximum batch-size enforcement
-* Concrete next-action recommendations
+### Scheduling Engine
+
+- Dynamic urgency scoring
+- Aging to reduce starvation
+- Deterministic priority tie-breaking
+- Highest-urgency anchor selection
+- Process-aware compatibility scoring
+- Maximum batch-size enforcement
+- Priority-inversion protection
+- Structured scheduling recommendations
 
 ### Order Management
 
-* Waiting, in-progress, complete, and cancelled states
-* Safe rejection of invalid lifecycle transitions
-* Duplicate order ID rejection
-* Order lookup by ID
-* Manual order creation
-* Manual lifecycle control
+- Drive-thru, mobile, and eat-in order sources
+- Waiting, in-progress, complete, and cancelled states
+- Duplicate order ID rejection
+- Safe lifecycle-transition validation
+- Order lookup by ID
+- Manual order creation and control
 
-### Simulation
+### Equipment and Simulation
 
-* Randomized drink, size, temperature, and preparation attributes
-* Normal-demand and rush-demand generation
-* Simulated order arrival times
-* Estimated preparation times
-* Equipment availability simulation
-* Concurrent equipment operation
-* FIFO scheduling simulation
-* Dynamic scheduling with batching
-* Comparative performance metrics
-* Repeatable simulation using fixed random seeds
+- Espresso, brew, frozen, and other equipment categories
+- Simulated equipment availability
+- Concurrent operation across different stations
+- Normal-demand and rush-demand order generation
+- Repeatable random scenarios using fixed seeds
+- FIFO and dynamic-batching strategy comparison
+- Average wait, maximum wait, throughput, and equipment-operation metrics
 
-### Interface
+### Terminal Interface
 
-* Live terminal refresh
-* Color-coded workflow state
-* Simulation timer
-* Rush-level indicator
-* Next-action display
-* Active-equipment display
-* Waiting-queue table
-* Completed-order and wait-time metrics
-* Manual command mode
-* Separate demonstration and interactive modes
+- Live terminal refresh
+- ANSI color output
+- Simulation timer
+- Rush-level indicator
+- Latest-event display
+- Next-action recommendation
+- Anchor and batch display
+- Equipment status display
+- Waiting and in-progress queue table
+- Completed-order and wait-time metrics
 
-### Development
-
-* Automated scheduler and lifecycle tests
-* Modular C++ architecture
-* CMake build support
-* Command-line compilation support
-* Git version control
-
-## Architecture
-
-The project separates order data, queue management, scheduling policy, demand generation, equipment state, simulation control, terminal presentation, and user commands.
-
-```text
-main.cpp
-    |
-    +-- CommandProcessor
-    |       |
-    |       +-- parses manual commands
-    |       +-- creates orders
-    |       +-- controls order lifecycle
-    |
-    +-- TerminalDisplay
-    |       |
-    |       +-- renders the live dashboard
-    |       +-- color-codes system state
-    |       +-- displays metrics and recommendations
-    |
-    +-- OrderGenerator
-    |       |
-    |       +-- generates normal and rush demand
-    |       +-- randomizes order attributes
-    |
-    +-- SimulationRunner
-    |       |
-    |       +-- runs FIFO scheduling
-    |       +-- runs dynamic batching
-    |       +-- records performance metrics
-    |
-    +-- EquipmentManager
-    |       |
-    |       +-- tracks station availability
-    |       +-- advances equipment timers
-    |
-    +-- QueueManager
-    |       |
-    |       +-- owns Order objects
-    |       +-- enforces lifecycle transitions
-    |
-    +-- Scheduler
-            |
-            +-- calculates urgency
-            +-- prioritizes orders
-            +-- scores compatibility
-            +-- selects batch candidates
-
-Order
-    |
-    +-- shared order data model
-    +-- source and lifecycle enums
-```
-
-## Core Components
-
-### Order
-
-The `Order` structure represents one customer order.
-
-Each order stores:
-
-* Order ID
-* Drink name
-* Size
-* Hot or iced state
-* Order source
-* Placement timestamp
-* Preparation build key
-* Current lifecycle status
-* Estimated preparation time
-
-```cpp
-struct Order {
-    int id;
-    std::string drink;
-    std::string size;
-    bool hot;
-    Source source;
-    std::time_t placedAt;
-    std::string buildKey;
-    Status status;
-    int estimatedPrepSeconds;
-};
-```
-
-### QueueManager
-
-`QueueManager` owns the order collection and provides operations for:
-
-* Adding orders
-* Rejecting duplicate IDs
-* Finding orders by ID
-* Removing orders
-* Starting orders
-* Completing orders
-* Cancelling orders
-* Returning waiting orders
-* Returning active orders
-* Counting completed orders
-* Passing order data to the scheduler
-
-### Scheduler
-
-`Scheduler` contains the scheduling policy.
-
-It is responsible for:
-
-* Calculating urgency
-* Sorting orders by priority
-* Handling deterministic tie-breaking
-* Calculating compatibility scores
-* Determining whether orders may batch
-* Selecting the highest-urgency anchor
-* Ranking compatible candidates
-* Enforcing maximum batch size
-* Returning a structured scheduling decision
-
-### TerminalDisplay
-
-`TerminalDisplay` renders a color-coded live view of the workflow.
-
-The dashboard displays:
-
-* Simulation time
-* Current rush level
-* Latest system event
-* Recommended equipment station
-* Anchor order
-* Compatible batch orders
-* Busy and available equipment
-* Waiting and in-progress orders
-* Completed-order count
-* Average waiting time
-* Current recommended batch size
-
-The terminal refreshes after events such as:
-
-* A new order arriving
-* An order starting
-* An order completing
-* An order being cancelled
-* The schedule being recalculated
-
-### CommandProcessor
-
-`CommandProcessor` provides an interactive manual-control mode.
-
-Supported commands:
+### Interactive Commands
 
 ```text
 add
@@ -275,111 +106,125 @@ help
 quit
 ```
 
-The `add` command prompts the user for:
+The program separates its automated demonstration and manual command modes.
 
-* Drink name
-* Size
-* Temperature
-* Order source
-* Required equipment
-* Estimated preparation time
-
-The command processor uses `QueueManager` lifecycle rules, so invalid state transitions are rejected safely.
-
-Examples:
+## Architecture
 
 ```text
-start 12
-complete 12
-cancel 18
-find 21
+                             +----------------------+
+                             |       main.cpp       |
+                             | system coordination  |
+                             +----------+-----------+
+                                        |
+         +------------------------------+------------------------------+
+         |                              |                              |
+         v                              v                              v
++------------------+          +------------------+          +------------------+
+| CommandProcessor |          | TerminalDisplay  |          | SimulationRunner |
+| parses commands  |          | live dashboard   |          | strategy testing |
++--------+---------+          +--------+---------+          +--------+---------+
+         |                             |                             |
+         +-----------------------------+-----------------------------+
+                                       |
+                     +-----------------+-----------------+
+                     |                                   |
+                     v                                   v
+             +---------------+                   +------------------+
+             | QueueManager  |                   | EquipmentManager |
+             | owns orders   |                   | station state    |
+             +-------+-------+                   +--------+---------+
+                     |                                    |
+                     +----------------+-------------------+
+                                      |
+                                      v
+                              +---------------+
+                              |   Scheduler   |
+                              | urgency and   |
+                              | batch policy  |
+                              +-------+-------+
+                                      |
+                                      v
+                                  +-------+
+                                  | Order |
+                                  +-------+
+
+OrderGenerator supplies randomized normal-demand and rush-demand streams.
 ```
 
-While the system is paused, state-changing commands are blocked. Lookup, help, resume, and quit commands remain available.
+## Core Components
 
-### OrderGenerator
+### `Order`
 
-`OrderGenerator` produces repeatable simulated order streams.
-
-It randomizes:
-
-* Source
-* Drink
-* Size
-* Temperature
-* Build key
-* Arrival time
-* Estimated preparation time
-
-Initial source probabilities:
-
-| Source     | Probability |
-| ---------- | ----------: |
-| Drive-Thru |         45% |
-| Mobile     |         35% |
-| Eat-In     |         20% |
-
-Supported demand scenarios:
-
-| Scenario      | Arrival interval |
-| ------------- | ---------------: |
-| Normal demand |    15–45 seconds |
-| Rush demand   |     2–10 seconds |
-
-A fixed random seed can be used to reproduce the same simulation.
-
-### EquipmentManager
-
-`EquipmentManager` tracks four simulated preparation stations:
-
-* Espresso station
-* Brew station
-* Frozen station
-* Other station
-
-Each station has one of two states:
+Represents one customer order.
 
 ```cpp
-enum class EquipmentState {
-    Available,
-    Busy
+struct Order {
+    int id;
+    std::string drink;
+    std::string size;
+    bool hot;
+    Source source;
+    std::time_t placedAt;
+    std::string buildKey;
+    Status status = Status::Waiting;
+    int estimatedPrepSeconds = 0;
 };
 ```
 
-Different stations may operate concurrently.
+### `QueueManager`
 
-Initial fixed durations:
+Owns the order collection and enforces lifecycle operations.
 
-| Equipment        | Busy duration |
-| ---------------- | ------------: |
-| Espresso station |       3 ticks |
-| Brew station     |       2 ticks |
-| Frozen station   |       4 ticks |
-| Other station    |        1 tick |
+Responsibilities include:
 
-### SimulationRunner
+- Adding and removing orders
+- Rejecting duplicate IDs
+- Finding orders
+- Starting, completing, and cancelling orders
+- Returning waiting and active order views
+- Counting completed orders
+- Passing orders to the scheduler for prioritization
 
-`SimulationRunner` executes the same order stream using different scheduling strategies.
+### `Scheduler`
 
-```cpp
-enum class SchedulingStrategy {
-    FIFO,
-    DynamicBatching
-};
-```
+Contains the core scheduling policy.
 
-The runner tracks:
+Responsibilities include:
 
-* Orders completed
-* Total simulation ticks
-* Average wait time
-* Maximum wait time
-* Equipment operations
-* Orders incorporated into batches
+- Urgency calculation
+- Dynamic sorting
+- Deterministic tie-breaking
+- Compatibility scoring
+- Batch eligibility
+- Anchor selection
+- Batch-candidate ranking
+- Structured scheduling decisions
 
-## Scheduling Logic
+### `TerminalDisplay`
 
-The scheduler assigns each waiting order an urgency score:
+Renders the current system state, recommendation, queue, equipment availability, and metrics.
+
+### `CommandProcessor`
+
+Parses manual commands and routes valid actions to `QueueManager`.
+
+### `OrderGenerator`
+
+Generates repeatable order streams under normal and rush demand.
+
+### `EquipmentManager`
+
+Tracks the availability and busy duration of preparation stations.
+
+### `SimulationRunner`
+
+Runs controlled comparisons between FIFO and dynamic batching using the same order stream.
+
+## Scheduling Algorithm
+
+### Urgency
+
+Each waiting order receives an urgency score:
 
 ```text
 urgency = source rate × seconds waiting
@@ -387,69 +232,73 @@ urgency = source rate × seconds waiting
 
 Initial source rates:
 
-| Order Source | Urgency Rate |
-| ------------ | -----------: |
-| Drive-Thru   |          1.0 |
-| Mobile       |          0.6 |
-| Eat-In       |          0.4 |
+| Source | Rate |
+| --- | ---: |
+| Drive-Thru | 1.0 |
+| Mobile | 0.6 |
+| Eat-In | 0.4 |
 
-Drive-thru orders accumulate urgency more quickly because they are modeled as more time-sensitive.
-
-Urgency also increases with wait time. Therefore, an older mobile or eat-in order can eventually overtake a newer drive-thru order.
-
-This aging behavior reduces the risk of starvation.
-
-### Urgency Example
-
-An eat-in order waiting for 200 seconds receives:
-
-```text
-0.4 × 200 = 80
-```
-
-A drive-thru order waiting for 30 seconds receives:
-
-```text
-1.0 × 30 = 30
-```
-
-The scheduler selects the older eat-in order because its urgency score is higher.
-
-### Priority Tie-Breaking
-
-When two waiting orders have equal urgency, the scheduler uses:
-
-1. Earlier placement time
-2. Lower order ID
-
-This produces deterministic results.
-
-## Process-Aware Batching
-
-The dynamic scheduler selects the highest-urgency waiting order as the anchor.
-
-It then searches for compatible waiting orders that can be prepared alongside the anchor without causing excessive priority inversion.
-
-### Build Key
-
-`buildKey` represents the primary equipment or preparation process required by an order.
-
-Current values:
-
-* `espresso`
-* `brew`
-* `frozen`
-* `other`
+Drive-thru urgency grows faster, reflecting its greater time sensitivity. However, all orders continue accumulating urgency, so an older mobile or eat-in order can eventually overtake a newer drive-thru order.
 
 Example:
 
 ```text
-Latte          → espresso
-Cappuccino     → espresso
-Frozen Matcha  → frozen
+Eat-In:     0.4 × 200 seconds = 80
+Drive-Thru: 1.0 × 30 seconds  = 30
 ```
 
-A latte and cappuccino may be included in one espresso batch, while frozen matcha is excluded.
+The older eat-in order is selected because its urgency is higher.
+
+### Tie-Breaking
+
+When two orders have equal urgency, the scheduler uses:
+
+1. Earlier placement time
+2. Lower order ID
+
+This ensures deterministic behavior.
+
+### Batch Selection
+
+The scheduler:
+
+1. Filters to waiting orders.
+2. Selects the highest-urgency order as the anchor.
+3. Searches for candidates with the same `buildKey`.
+4. Rejects candidates that would violate priority rules.
+5. Ranks compatible candidates.
+6. Adds candidates until the maximum batch size is reached.
+
+The default maximum batch size is three total orders:
+
+```text
+1 anchor
+2 compatible candidates
+```
+
+## `buildKey`
+
+`buildKey` represents the primary preparation process or equipment group required by an order.
+
+Current values:
+
+| `buildKey` | Equipment or process |
+| --- | --- |
+| `espresso` | Espresso station |
+| `brew` | Brew station |
+| `frozen` | Frozen-drink station |
+| `other` | Other preparation |
+
+Examples:
+
+```text
+Latte          -> espresso
+Cappuccino     -> espresso
+Coffee         -> brew
+Frozen Matcha  -> frozen
+```
+
+Two orders with different build keys cannot batch.
 
 ### Compatibility Score
 
@@ -459,74 +308,63 @@ Same temperature:  +10
 Same drink:        +10
 ```
 
-| Compatibility                        | Score |
-| ------------------------------------ | ----: |
-| Different process                    |     0 |
-| Same process                         |    40 |
-| Same process and temperature         |    50 |
-| Same process, temperature, and drink |    60 |
+| Match | Score |
+| --- | ---: |
+| Different process | 0 |
+| Same process | 40 |
+| Same process and temperature | 50 |
+| Same process, temperature, and drink | 60 |
 
-Compatible candidates are ranked by:
+Candidates are ranked by:
 
 1. Higher compatibility score
 2. Higher urgency
 3. Lower order ID
 
-### Priority Protection
-
 A candidate is rejected when:
 
-* It uses a different build key
-* It is not waiting
-* It is the same order as the anchor
-* Its compatibility score is too low
-* It is more urgent than the anchor
-* Its urgency gap exceeds the permitted threshold
+- It has a different `buildKey`
+- It is not waiting
+- It is the anchor itself
+- It is more urgent than the anchor
+- Its urgency gap is above the permitted threshold
 
 Batching fills around the priority system rather than replacing it.
 
-### Batch Size
-
-The default maximum batch size is three total orders:
+## Order State Machine
 
 ```text
-1 anchor order
-2 compatible batch candidates
-```
+                       start
+              +----------------------+
+              |                      v
+         +---------+            +------------+
+         | Waiting |            | InProgress |
+         +----+----+            +------+-----+
+              |                        |
+      cancel  |                        | complete
+              v                        v
+        +-----------+            +----------+
+        | Cancelled |            | Complete |
+        +-----------+            +----------+
 
-## Order Lifecycle
-
-The current lifecycle is:
-
-```text
-Waiting → InProgress → Complete
-    |
-    └──────────────→ Cancelled
+InProgress can also transition to Cancelled.
+Complete and Cancelled are terminal states.
 ```
 
 Valid transitions:
 
 ```text
-Waiting → InProgress
-InProgress → Complete
-Waiting → Cancelled
-InProgress → Cancelled
+Waiting -> InProgress
+InProgress -> Complete
+Waiting -> Cancelled
+InProgress -> Cancelled
 ```
 
-Completed and cancelled orders are terminal and are excluded from future scheduling decisions.
-
-Invalid examples include:
-
-```text
-Waiting → Complete
-Complete → InProgress
-Cancelled → InProgress
-Complete → Cancelled
-```
+Invalid transitions are rejected safely.
 
 ## Program Modes
 
-When the program starts, the user can select a mode:
+At launch, the user can select:
 
 ```text
 1. Live demonstration
@@ -536,22 +374,20 @@ When the program starts, the user can select a mode:
 
 ### Live Demonstration
 
-The live demonstration:
+The demonstration:
 
-* Loads example orders
-* Calculates the initial schedule
-* Adds a new order
-* Starts a recommended batch
-* Updates equipment state
-* Completes the batch
-* Recalculates the schedule
-* Displays each event through the live dashboard
+- Loads sample orders
+- Calculates the schedule
+- Adds a new order
+- Starts the recommended batch
+- Marks its equipment busy
+- Completes the batch
+- Recalculates the schedule
+- Refreshes the terminal after each event
 
 ### Manual Command Mode
 
-Manual mode allows the user to add and control orders directly.
-
-Example session:
+Example:
 
 ```text
 > add
@@ -568,150 +404,40 @@ Estimated preparation seconds: 90
 > quit
 ```
 
-## Scheduling Strategy Comparison
-
-Week 3 introduced a controlled experiment comparing two strategies using the same generated rush-demand stream.
-
-### Strategy A: FIFO
-
-FIFO processes the oldest available order requiring a free equipment station.
-
-It does not combine compatible orders into shared batches.
-
-### Strategy B: Dynamic Scheduling with Batching
-
-Dynamic scheduling:
-
-1. Selects the highest-urgency eligible order
-2. Checks the required equipment
-3. Searches for compatible waiting orders
-4. Pulls qualified candidates into the batch
-5. Models shared preparation time
-6. Protects more urgent orders from displacement
-
-### Simulation Assumption
-
-The initial batching model estimates batch duration as:
-
-```text
-batch duration =
-longest individual preparation time
-+ one tick per additional order
-```
-
-This represents shared setup and partially overlapping preparation.
-
-It is an initial simulation assumption and has not yet been validated in a production environment.
-
-## Week 3 Experimental Results
-
-A fixed-seed rush scenario generated 20 orders and passed the identical stream through both strategies.
-
-### FIFO Results
-
-```text
-Orders completed: 20
-Total simulation ticks: 78
-Average wait: 17.80 ticks
-Maximum wait: 57 ticks
-Equipment operations: 20
-Orders pulled into batches: 0
-```
-
-### Dynamic Scheduling Results
-
-```text
-Orders completed: 20
-Total simulation ticks: 59
-Average wait: 12.35 ticks
-Maximum wait: 45 ticks
-Equipment operations: 13
-Orders pulled into batches: 7
-```
-
-### Improvement Summary
-
-| Metric                |        FIFO |     Dynamic |                      Change |
-| --------------------- | ----------: | ----------: | --------------------------: |
-| Average wait          | 17.80 ticks | 12.35 ticks |            5.45 fewer ticks |
-| Maximum wait          |    57 ticks |    45 ticks |              12 fewer ticks |
-| Total simulation time |    78 ticks |    59 ticks |              19 fewer ticks |
-| Equipment operations  |          20 |          13 |          7 fewer operations |
-| Orders batched        |           0 |           7 | 7 additional batched orders |
-
-For this simulated rush scenario, dynamic scheduling produced approximately:
-
-* 31% lower average wait
-* 21% lower maximum wait
-* 24% shorter total simulation time
-* 35% fewer equipment operations
-
-These results demonstrate improvement within the current simulation model. They do not represent measured performance in a real store.
-
-## Project Structure
-
-```text
-Dynamic-Workflow-Scheduler/
-├── main.cpp
-├── Order.h
-├── Order.cpp
-├── QueueManager.h
-├── QueueManager.cpp
-├── Scheduler.h
-├── Scheduler.cpp
-├── TerminalDisplay.h
-├── TerminalDisplay.cpp
-├── CommandProcessor.h
-├── CommandProcessor.cpp
-├── OrderGenerator.h
-├── OrderGenerator.cpp
-├── EquipmentManager.h
-├── EquipmentManager.cpp
-├── SimulationRunner.h
-├── SimulationRunner.cpp
-├── test_scheduler.cpp
-├── CMakeLists.txt
-└── README.md
-```
+While paused, commands that change scheduler state are blocked. Lookup, help, resume, and quit remain available.
 
 ## Build Instructions
 
 ### Requirements
 
-* A C++17-compatible compiler
-* GCC, MinGW, Clang, or another supported compiler
-* A terminal that supports ANSI colors
+- C++17-compatible compiler
+- GCC, MinGW, Clang, or MSVC
+- CMake 3.20 or newer for the CMake workflow
+- Terminal with ANSI-color support
 
 ### Compile the Interactive Program
 
 ```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic \
+    main.cpp \
+    Order.cpp \
+    QueueManager.cpp \
+    Scheduler.cpp \
+    TerminalDisplay.cpp \
+    CommandProcessor.cpp \
+    -o scheduler.exe
+```
+
+On Windows PowerShell, the command may be entered on one line:
+
+```powershell
 g++ -std=c++17 -Wall -Wextra -Wpedantic main.cpp Order.cpp QueueManager.cpp Scheduler.cpp TerminalDisplay.cpp CommandProcessor.cpp -o scheduler.exe
 ```
 
-### Run on Windows PowerShell
+### Compile the Full Simulation Build
 
 ```powershell
-.\scheduler.exe
-```
-
-### Compile the Simulation Version
-
-When using the order generator and simulation runner:
-
-```bash
-g++ -std=c++17 -Wall -Wextra -Wpedantic main.cpp Order.cpp OrderGenerator.cpp EquipmentManager.cpp QueueManager.cpp Scheduler.cpp SimulationRunner.cpp TerminalDisplay.cpp CommandProcessor.cpp -o scheduler.exe
-```
-
-### Compile the Tests
-
-```bash
-g++ -std=c++17 -Wall -Wextra -Wpedantic test_scheduler.cpp Order.cpp QueueManager.cpp Scheduler.cpp -o scheduler_tests.exe
-```
-
-### Run the Tests
-
-```powershell
-.\scheduler_tests.exe
+g++ -std=c++17 -Wall -Wextra -Wpedantic main.cpp Order.cpp QueueManager.cpp Scheduler.cpp TerminalDisplay.cpp CommandProcessor.cpp OrderGenerator.cpp EquipmentManager.cpp SimulationRunner.cpp -o scheduler.exe
 ```
 
 ### Build with CMake
@@ -721,146 +447,340 @@ cmake -S . -B build
 cmake --build build
 ```
 
-Run the generated executable from the build directory.
+### Compile the Tests
+
+```powershell
+g++ -std=c++17 -Wall -Wextra -Wpedantic test_scheduler.cpp Order.cpp QueueManager.cpp Scheduler.cpp -o scheduler_tests.exe
+```
+
+## Run Instructions
+
+### Windows
+
+```powershell
+.\scheduler.exe
+```
+
+### Linux or macOS
+
+```bash
+./scheduler
+```
+
+### Run Tests
+
+```powershell
+.\scheduler_tests.exe
+```
+
+### Run a Repeatable Simulation
+
+```powershell
+.\scheduler.exe --seed 42
+```
+
+A different seed produces a different order stream:
+
+```powershell
+.\scheduler.exe --seed 100
+```
+
+## Example Terminal Output
+
+```text
+DYNAMIC WORKFLOW SCHEDULER
+Simulation Time: 00:04
+Rush Level: LOW
+
+EVENT: Batch completed: 2 order(s); schedule recalculated
+
+NEXT ACTION
+Brewing Station
+Anchor: #22 Eat-In Coffee
+Batch: None
+
+ACTIVE EQUIPMENT
+Espresso    AVAILABLE
+Brew        AVAILABLE
+Frozen      AVAILABLE
+Other       AVAILABLE
+
+WAITING QUEUE
+ID   SOURCE        WAIT    STATUS       EQUIPMENT
+--------------------------------------------------------
+22   Eat-In        93s     Scheduled    Brew
+23   Drive-Thru    16s     Waiting      Frozen
+24   Drive-Thru    3s      Waiting      Espresso
+
+METRICS
+Completed: 2
+Average Wait: 37s
+Current Batch Size: 1
+```
+
+ANSI colors highlight the title, rush level, event messages, equipment state, and scheduled orders during execution.
+
+## Simulation Methodology
+
+The simulation compares FIFO and dynamic batching using the same generated rush-demand order stream.
+
+### Controlled Inputs
+
+- Fixed random seed
+- Identical orders for both strategies
+- Same arrival times
+- Same estimated preparation times
+- Same equipment categories
+- Same simulated time scale
+
+### FIFO Strategy
+
+FIFO selects the oldest eligible order for each available equipment station. It does not combine compatible orders.
+
+### Dynamic Batching Strategy
+
+Dynamic scheduling:
+
+1. Selects the highest-urgency eligible order.
+2. Checks the required equipment.
+3. Searches for compatible waiting orders.
+4. Pulls qualified candidates into a batch.
+5. Protects higher-urgency work from displacement.
+6. Models shared preparation time.
+
+### Batch-Time Assumption
+
+```text
+batch duration =
+longest individual preparation duration
++ one tick per additional order
+```
+
+This models shared setup and partially overlapping work. It is an initial simulation assumption, not a measured production value.
+
+### Measured Metrics
+
+- Orders completed
+- Total simulation ticks
+- Average wait
+- Maximum wait
+- Equipment operations
+- Orders incorporated into batches
+
+## Measured Results
+
+A fixed-seed rush scenario generated 20 orders and passed the identical stream through both strategies.
+
+| Metric | FIFO | Dynamic | Change |
+| --- | ---: | ---: | ---: |
+| Orders completed | 20 | 20 | No change |
+| Total simulation time | 78 ticks | 59 ticks | 19 fewer ticks |
+| Average wait | 17.80 ticks | 12.35 ticks | 5.45 fewer ticks |
+| Maximum wait | 57 ticks | 45 ticks | 12 fewer ticks |
+| Equipment operations | 20 | 13 | 7 fewer operations |
+| Orders batched | 0 | 7 | 7 additional orders |
+
+Within the current simulation model, dynamic scheduling produced approximately:
+
+- 31% lower average wait
+- 21% lower maximum wait
+- 24% shorter total simulation time
+- 35% fewer equipment operations
+
+These results demonstrate improvement under the current assumptions. They do not represent measured performance in a real store.
 
 ## Testing
 
-The automated test suite covers:
+The test suite covers:
 
-* Source urgency rates
-* Aging and starvation prevention
-* Empty queue handling
-* Future timestamp handling
-* Invalid source handling
-* Deterministic tie-breaking
-* Compatibility scoring
-* Batch eligibility
-* Priority-inversion protection
-* Batch-size limits
-* Empty scheduling decisions
-* Completed-order exclusion
-* Cancelled-order exclusion
-* In-progress-order exclusion
-* Duplicate order ID rejection
-* Valid lifecycle transitions
-* Invalid lifecycle transition rejection
-
-Current scheduler, batching, prioritization, and lifecycle tests pass successfully.
+- Source urgency rates
+- Aging and starvation prevention
+- Empty queues
+- Future timestamps
+- Invalid source values
+- Deterministic tie-breaking
+- Compatibility scoring
+- Batch eligibility
+- Priority-inversion protection
+- Batch-size limits
+- Empty scheduling decisions
+- Completed-order exclusion
+- Cancelled-order exclusion
+- In-progress-order exclusion
+- Duplicate ID rejection
+- Valid lifecycle transitions
+- Invalid lifecycle-transition rejection
 
 The interactive mode has also been manually tested using:
 
 ```text
-add → find → start → complete → quit
+add -> find -> start -> complete -> quit
 ```
 
-Additional command cases tested include:
+## Embedded Extension
+
+The proposed STM32 extension keeps the embedded scope intentionally small.
+
+The first hardware prototype would:
+
+1. Read three equipment-status buttons or sensors.
+2. Track espresso, brew, and frozen station availability.
+3. Send state changes to the desktop scheduler through UART.
+4. Allow the scheduler to avoid assigning orders to unavailable equipment.
+
+Example UART messages:
 
 ```text
-pause → blocked state-changing command → resume
-find unknown ID
-complete waiting order
-start completed order
-cancel terminal order
+ESPRESSO:AVAILABLE
+BREW:BUSY
+FROZEN:AVAILABLE
 ```
+
+### Hardware/Software Boundary
+
+The STM32 handles:
+
+- GPIO inputs
+- Input debouncing
+- Equipment-state tracking
+- UART message formatting
+- Hardware communication
+
+The desktop C++ application handles:
+
+- Serial parsing
+- Equipment-state updates
+- Queue management
+- Urgency scoring
+- Batch selection
+- Terminal visualization
+- Metrics
+
+Full design details are documented in:
+
+[`docs/embedded-extension.md`](docs/embedded-extension.md)
+
+## Technologies Used
+
+- C++17
+- Object-oriented programming
+- Standard Template Library
+- Vectors and sorting algorithms
+- Finite-state-machine design
+- Scheduling algorithms
+- Discrete-event simulation
+- UART architecture
+- STM32 extension planning
+- ANSI terminal control
+- CMake
+- GCC / MinGW
+- GDB
+- Git
+- GitHub
 
 ## Current Limitations
 
-The current version is a prototype rather than a production-ready system.
+- The manual and randomized simulation modes are separate.
+- The live demonstration uses simplified timing.
+- Equipment timing uses fixed or estimated durations.
+- Batch savings rely on an initial simulation assumption.
+- The program has no persistent order history.
+- Completed orders are not automatically archived.
+- Manual mode is terminal-based rather than graphical.
+- Random arrivals are not yet integrated into the live dashboard.
+- Manual commands and automatic equipment timers are not fully unified.
+- Source urgency rates are initial assumptions.
+- Compatibility weights are initial assumptions.
+- Simulation parameters have not been calibrated with store data.
+- Worker availability and parallel worker capacity are not modeled.
+- Machine failures and cleaning delays are not modeled.
+- Drink modifiers and inventory constraints are not modeled.
+- Physical equipment data is not yet connected.
+- The project is not a production-ready point-of-sale system.
 
-Current limitations include:
-
-* Manual mode and random simulation currently run as separate modes
-* Manual commands are line-based rather than graphical
-* The live demonstration uses simplified timing
-* Equipment durations use simplified fixed or estimated values
-* Batching-time savings are based on an initial assumption
-* No persistent order history
-* No automatic archival of completed orders
-* No physical equipment-status input
-* No sensor or STM32 integration
-* Source urgency rates are initial assumptions
-* Compatibility weights are initial assumptions
-* Simulation parameters have not been calibrated using store data
-* The system does not yet model worker capacity
-* The system does not yet model machine failures or cleaning
-* Drink modifiers and inventory constraints are not yet modeled
-* Manual commands and automatic equipment timing are not yet fully integrated
-* No graphical interface
-
-## Development Roadmap
+## Milestone Roadmap
 
 ### Completed
 
-* [x] Identify the workflow bottleneck
-* [x] Define the `Order` data model
-* [x] Implement `QueueManager`
-* [x] Separate scheduling logic into `Scheduler`
-* [x] Implement dynamic urgency scoring
-* [x] Add aging to reduce starvation
-* [x] Implement dynamic prioritization
-* [x] Add deterministic tie-breaking
-* [x] Reject duplicate order IDs
-* [x] Add process-aware compatibility scoring
-* [x] Implement process-aware batch selection
-* [x] Enforce maximum batch size
-* [x] Add order lifecycle transitions
-* [x] Reject invalid lifecycle transitions safely
-* [x] Add automated scheduler tests
-* [x] Build a randomized order generator
-* [x] Create normal-demand and rush-demand scenarios
-* [x] Add estimated preparation times
-* [x] Model equipment availability
-* [x] Add fixed-tick equipment busy states
-* [x] Implement FIFO simulation
-* [x] Implement dynamic batching simulation
-* [x] Compare both strategies using the same order stream
-* [x] Measure wait time and equipment operations
-* [x] Add command-line random seed support
-* [x] Make simulation runs reproducible
-* [x] Add safe handling for invalid seed input
-* [x] Add live terminal visualization
-* [x] Add terminal colors
-* [x] Display next action and batch recommendation
-* [x] Display active equipment state
-* [x] Display live queue metrics
-* [x] Add interactive manual mode
-* [x] Add order creation command
-* [x] Add start, complete, and cancel commands
-* [x] Add order lookup by ID
-* [x] Add pause and resume commands
-* [x] Separate demonstration and manual program modes
+- [x] Identify the workflow bottleneck
+- [x] Define the order model
+- [x] Implement queue management
+- [x] Implement dynamic urgency scoring
+- [x] Add aging to reduce starvation
+- [x] Add deterministic tie-breaking
+- [x] Implement process-aware compatibility scoring
+- [x] Implement batch selection
+- [x] Enforce lifecycle transitions
+- [x] Reject duplicate order IDs
+- [x] Build a randomized order generator
+- [x] Model equipment availability
+- [x] Implement FIFO simulation
+- [x] Implement dynamic-batching simulation
+- [x] Measure wait time and equipment operations
+- [x] Add fixed-seed simulation support
+- [x] Add automated tests
+- [x] Add live terminal visualization
+- [x] Add terminal colors
+- [x] Display scheduling recommendations
+- [x] Display equipment state and queue metrics
+- [x] Add manual command mode
+- [x] Add `add`, `find`, `start`, `complete`, and `cancel`
+- [x] Add pause and resume controls
+- [x] Define the STM32 extension
+- [x] Document the hardware/software boundary
 
 ### In Progress
 
-* [ ] Add automated tests for command parsing
-* [ ] Add simulation-specific automated tests
-* [ ] Run comparisons across multiple random seeds
-* [ ] Improve manual-mode input validation
-* [ ] Integrate all program targets into CMake
-* [ ] Refine scheduling parameters through customer discovery
+- [ ] Add automated command-parser tests
+- [ ] Add simulation-specific tests
+- [ ] Compare results across multiple random seeds
+- [ ] Improve manual-input validation
+- [ ] Integrate all build targets into CMake
+- [ ] Refine scheduling parameters through customer discovery
 
 ### Planned
 
-* [ ] Integrate random arrivals into the live dashboard
-* [ ] Retry blocked orders automatically
-* [ ] Record per-source wait-time metrics
-* [ ] Compare FIFO, urgency-only, and dynamic batching
-* [ ] Measure equipment utilization
-* [ ] Add automatic archival and order history
-* [ ] Model workers and parallel preparation capacity
-* [ ] Model equipment failures and cleaning delays
-* [ ] Add drink modifiers and inventory constraints
-* [ ] Create a graphical interface
-* [ ] Add STM32-based equipment or sensor inputs
-* [ ] Explore a closed-loop embedded workflow assistant
+- [ ] Integrate random arrivals into the live dashboard
+- [ ] Retry blocked orders automatically
+- [ ] Add per-source wait metrics
+- [ ] Measure equipment utilization
+- [ ] Add automatic order history and archival
+- [ ] Model worker capacity
+- [ ] Model equipment failures and cleaning
+- [ ] Add drink modifiers and inventory constraints
+- [ ] Add serial communication with an STM32
+- [ ] Add physical equipment-state inputs
+- [ ] Create a graphical interface
+- [ ] Explore a closed-loop embedded workflow assistant
+
+## Lessons Learned
+
+### The visible bottleneck is not always the real bottleneck
+
+The project began as an idea for automating physical coffee-shop tasks. Observation showed that a larger problem was the repeated mental sorting and reprioritization workers performed during rush periods.
+
+### Priority should change over time
+
+A rigid source hierarchy can starve lower-priority orders. Modeling urgency as a rate allows time-sensitive streams to rise quickly while still allowing old orders to recover priority.
+
+### Batching should support priority, not replace it
+
+Grouping similar work is useful only when it does not create a more serious delay elsewhere. The batching algorithm therefore begins with the highest-urgency anchor and fills around it.
+
+### Simulation makes performance claims testable
+
+Building FIFO and dynamic strategies against the same order stream made it possible to measure the effects of scheduling assumptions rather than relying only on intuition.
+
+### Modular architecture makes hardware extension possible
+
+Separating orders, queue ownership, scheduling, equipment state, presentation, commands, and simulation makes the system easier to test and creates a clear boundary for future STM32 integration.
+
+### Scope control is an engineering decision
+
+A button-based UART prototype can demonstrate embedded architecture without unsafe or premature integration with commercial equipment.
 
 ## Project Goal
 
 The long-term goal is to create a workflow-assistance system that reduces cognitive friction rather than replacing workers.
 
-By externalizing routine prioritization, equipment tracking, batching, and task-sequencing decisions, the scheduler is intended to help workers focus more attention on production, communication, and customer service.
-
-The project also demonstrates how scheduling algorithms, simulation, embedded-system concepts, software architecture, and human-centered design can be applied to a real operational problem.
-
-
-
+By externalizing routine prioritization, batching, equipment tracking, and task-sequencing decisions, the scheduler is intended to help workers focus on production, communication, and customer service.
