@@ -1,6 +1,7 @@
 // Dynamic Workflow Scheduler
-// Week 4: Live terminal visualization
+// Week 4: Live terminal visualization and user commands
 
+#include "CommandProcessor.h"
 #include "Order.h"
 #include "QueueManager.h"
 #include "Scheduler.h"
@@ -8,9 +9,9 @@
 
 #include <chrono>
 #include <ctime>
+#include <iostream>
 #include <string>
 #include <thread>
-#include <iostream>
 
 namespace {
 
@@ -27,13 +28,9 @@ void refresh(
     std::time_t simulationStart,
     const std::string& eventMessage
 ) {
-    const std::time_t now =
-        std::time(nullptr);
+    const std::time_t now = std::time(nullptr);
 
-    queue.prioritize(
-        scheduler,
-        now
-    );
+    queue.prioritize(scheduler, now);
 
     display.render(
         queue,
@@ -52,14 +49,11 @@ bool startDecision(
         return false;
     }
 
-    if (!queue.startOrder(
-            decision.anchorOrderId
-        )) {
+    if (!queue.startOrder(decision.anchorOrderId)) {
         return false;
     }
 
-    for (int orderId :
-         decision.batchedOrderIds) {
+    for (int orderId : decision.batchedOrderIds) {
         queue.startOrder(orderId);
     }
 
@@ -71,80 +65,38 @@ void completeDecision(
     const ScheduleDecision& decision
 ) {
     if (decision.anchorOrderId != -1) {
-        queue.completeOrder(
-            decision.anchorOrderId
-        );
+        queue.completeOrder(decision.anchorOrderId);
     }
 
-    for (int orderId :
-         decision.batchedOrderIds) {
+    for (int orderId : decision.batchedOrderIds) {
         queue.completeOrder(orderId);
     }
 }
 
-std::string describeStartedBatch(
+std::size_t totalBatchSize(
     const ScheduleDecision& decision
 ) {
-    const std::size_t totalBatchSize =
-        decision.anchorOrderId == -1
-            ? 0
-            : 1 +
-                  decision
-                      .batchedOrderIds
-                      .size();
+    if (decision.anchorOrderId == -1) {
+        return 0;
+    }
 
-    return
-        "Batch started at " +
-        decision.equipment +
-        ": anchor #" +
-        std::to_string(
-            decision.anchorOrderId
-        ) +
-        ", total orders " +
-        std::to_string(
-            totalBatchSize
-        );
+    return 1 + decision.batchedOrderIds.size();
 }
 
-std::string describeCompletedBatch(
-    const ScheduleDecision& decision
+void seedDemoQueue(
+    QueueManager& queue,
+    std::time_t startTime
 ) {
-    const std::size_t totalBatchSize =
-        decision.anchorOrderId == -1
-            ? 0
-            : 1 +
-                  decision
-                      .batchedOrderIds
-                      .size();
-
-    return
-        "Batch completed: " +
-        std::to_string(
-            totalBatchSize
-        ) +
-        " order(s); schedule recalculated";
-}
-
-} // namespace
-
-int main() {
-    TerminalDisplay::enableAnsiColors();
-
-    const std::time_t simulationStart =
-        std::time(nullptr);
-
-    QueueManager queue;
-    Scheduler scheduler;
-    TerminalDisplay display;
-
     queue.addOrder({
         18,
         "Latte",
         "M",
         true,
         Source::DriveThru,
-        simulationStart - 42,
-        "espresso"
+        startTime - 42,
+        "espresso",
+        Status::Waiting,
+        90
     });
 
     queue.addOrder({
@@ -153,8 +105,10 @@ int main() {
         "M",
         true,
         Source::Mobile,
-        simulationStart - 65,
-        "espresso"
+        startTime - 65,
+        "espresso",
+        Status::Waiting,
+        85
     });
 
     queue.addOrder({
@@ -163,8 +117,10 @@ int main() {
         "L",
         false,
         Source::EatIn,
-        simulationStart - 89,
-        "brew"
+        startTime - 89,
+        "brew",
+        Status::Waiting,
+        35
     });
 
     queue.addOrder({
@@ -173,9 +129,21 @@ int main() {
         "L",
         false,
         Source::DriveThru,
-        simulationStart - 12,
-        "frozen"
+        startTime - 12,
+        "frozen",
+        Status::Waiting,
+        110
     });
+}
+
+void runLiveDemo() {
+    const std::time_t simulationStart = std::time(nullptr);
+
+    QueueManager queue;
+    Scheduler scheduler;
+    TerminalDisplay display;
+
+    seedDemoQueue(queue, simulationStart);
 
     refresh(
         display,
@@ -194,7 +162,9 @@ int main() {
         true,
         Source::DriveThru,
         std::time(nullptr),
-        "espresso"
+        "espresso",
+        Status::Waiting,
+        40
     });
 
     refresh(
@@ -207,44 +177,36 @@ int main() {
 
     pauseForDemo();
 
-    const std::time_t decisionTime =
-        std::time(nullptr);
-
-    const ScheduleDecision activeDecision =
+    const ScheduleDecision decision =
         scheduler.makeDecision(
             queue.getWaitingOrders(),
-            decisionTime
+            std::time(nullptr)
         );
 
-    if (startDecision(
-            queue,
-            activeDecision
-        )) {
+    if (startDecision(queue, decision)) {
         refresh(
             display,
             queue,
             scheduler,
             simulationStart,
-            describeStartedBatch(
-                activeDecision
-            )
+            "Batch started at " + decision.equipment +
+                ": " +
+                std::to_string(totalBatchSize(decision)) +
+                " order(s)"
         );
 
         pauseForDemo();
 
-        completeDecision(
-            queue,
-            activeDecision
-        );
+        completeDecision(queue, decision);
 
         refresh(
             display,
             queue,
             scheduler,
             simulationStart,
-            describeCompletedBatch(
-                activeDecision
-            )
+            "Batch completed: " +
+                std::to_string(totalBatchSize(decision)) +
+                " order(s); schedule recalculated"
         );
     } else {
         refresh(
@@ -256,8 +218,61 @@ int main() {
         );
     }
 
-    std::cout << "\nPress Enter to exit...";
-    std::cin.get();
-    
+    std::cout << "\nPress Enter to return to the mode menu...";
+    std::string ignored;
+    std::getline(std::cin, ignored);
+}
+
+void runManualMode() {
+    const std::time_t simulationStart = std::time(nullptr);
+
+    QueueManager queue;
+    Scheduler scheduler;
+    TerminalDisplay display;
+
+    CommandProcessor commands(
+        queue,
+        scheduler,
+        display,
+        simulationStart
+    );
+
+    commands.run();
+}
+
+} // namespace
+
+int main() {
+    TerminalDisplay::enableAnsiColors();
+
+    while (true) {
+        TerminalDisplay::clear();
+
+        std::cout
+            << "DYNAMIC WORKFLOW SCHEDULER\n\n"
+            << "Choose a program mode:\n"
+            << "1. Live demonstration\n"
+            << "2. Manual command mode\n"
+            << "3. Quit\n\n"
+            << "> ";
+
+        std::string choice;
+
+        if (!std::getline(std::cin, choice)) {
+            break;
+        }
+
+        if (choice == "1") {
+            runLiveDemo();
+        } else if (choice == "2") {
+            runManualMode();
+        } else if (choice == "3" || choice == "quit") {
+            break;
+        }
+    }
+
+    TerminalDisplay::clear();
+    std::cout << "Dynamic Workflow Scheduler closed.\n";
+
     return 0;
 }
