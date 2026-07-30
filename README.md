@@ -35,7 +35,7 @@ The project includes both a repeatable simulation environment and an interactive
 
 ## Demo
 
-Add the project GIF to the repository at:
+View the project GIF at:
 
 ```text
 docs/images/live-scheduler-demo.gif
