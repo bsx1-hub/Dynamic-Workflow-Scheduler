@@ -779,6 +779,9 @@ Separating orders, queue ownership, scheduling, equipment state, presentation, c
 
 A button-based UART prototype can demonstrate embedded architecture without unsafe or premature integration with commercial equipment.
 
+## Hardware Extension
+
+Version 1.0 is a complete C++ simulation. The `hardware` branch extends it toward live embedded inputs using an STM32, beginning with UART-based order and equipment-status events.
 ## Project Goal
 
 The long-term goal is to create a workflow-assistance system that reduces cognitive friction rather than replacing workers.
