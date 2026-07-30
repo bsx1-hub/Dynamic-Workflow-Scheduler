@@ -781,7 +781,12 @@ A button-based UART prototype can demonstrate embedded architecture without unsa
 
 ## Hardware Extension
 
-Version 1.0 is a complete C++ simulation. The `hardware` branch extends it toward live embedded inputs using an STM32, beginning with UART-based order and equipment-status events.
+Version 1.0 is a complete C++ simulation. The `hardware` branch extends it toward live embedded inputs using an STM32 NUCLEO-L476RG.
+
+The first hardware MVP uses three buttons to represent Espresso, Brew, and Frozen station availability. The STM32 mirrors each state with an LED and sends updates over UART to the desktop scheduler.
+
+Full design, pin assignments, wiring plan, protocol, and limitations: [Hardware MVP](docs/hardware/MVP.md).
+
 ## Project Goal
 
 The long-term goal is to create a workflow-assistance system that reduces cognitive friction rather than replacing workers.
