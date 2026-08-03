@@ -3,11 +3,6 @@
 
 #include <string>
 
-enum class EquipmentState {
-    Available,
-    Busy
-};
-
 enum class EquipmentType {
     Espresso,
     Brew,
@@ -15,63 +10,40 @@ enum class EquipmentType {
     Other
 };
 
+enum class EquipmentState {
+    Available,
+    Busy
+};
+
 struct Equipment {
-    EquipmentType type;
     EquipmentState state = EquipmentState::Available;
     int busyTicksRemaining = 0;
 };
 
 class EquipmentManager {
 private:
-    Equipment espressoStation {
-        EquipmentType::Espresso
-    };
+    Equipment espressoStation;
+    Equipment brewStation;
+    Equipment frozenStation;
+    Equipment otherStation;
 
-    Equipment brewStation {
-        EquipmentType::Brew
-    };
-
-    Equipment frozenStation {
-        EquipmentType::Frozen
-    };
-
-    Equipment otherStation {
-        EquipmentType::Other
-    };
-
-    Equipment& getMutableEquipment(
-        EquipmentType type
-    );
+    Equipment& getMutableEquipment(EquipmentType type);
 
 public:
-    const Equipment& getEquipment(
-        EquipmentType type
-    ) const;
+    const Equipment& getEquipment(EquipmentType type) const;
+    bool isAvailable(EquipmentType type) const;
+    bool setBusy(EquipmentType type, int busyTicks);
 
-    bool isAvailable(
-        EquipmentType type
-    ) const;
-
-    bool setBusy(
-        EquipmentType type,
-        int busyTicks
-    );
+    // Applies an externally reported state. A reported BUSY state remains in
+    // effect until another reported update changes it.
+    void setReportedState(EquipmentType type, EquipmentState state);
 
     void update();
-
     void displayEquipment() const;
 };
 
-EquipmentType equipmentTypeFromBuildKey(
-    const std::string& buildKey
-);
-
-std::string equipmentTypeName(
-    EquipmentType type
-);
-
-std::string equipmentStateName(
-    EquipmentState state
-);
+EquipmentType equipmentTypeFromBuildKey(const std::string& buildKey);
+std::string equipmentTypeName(EquipmentType type);
+std::string equipmentStateName(EquipmentState state);
 
 #endif
