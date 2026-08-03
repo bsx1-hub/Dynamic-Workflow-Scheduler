@@ -16,10 +16,11 @@ enum class EquipmentState {
 };
 
 struct Equipment {
+    EquipmentType type;
     EquipmentState state = EquipmentState::Available;
     int busyTicksRemaining = 0;
+    bool reportedStateOverride = false;
 };
-
 class EquipmentManager {
 private:
     Equipment espressoStation;

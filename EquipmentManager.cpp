@@ -21,9 +21,7 @@ Equipment& EquipmentManager::getMutableEquipment(
             return otherStation;
     }
 
-    throw std::invalid_argument(
-        "Unknown equipment type."
-    );
+    throw std::invalid_argument("Unknown equipment type.");
 }
 
 const Equipment& EquipmentManager::getEquipment(
@@ -43,16 +41,13 @@ const Equipment& EquipmentManager::getEquipment(
             return otherStation;
     }
 
-    throw std::invalid_argument(
-        "Unknown equipment type."
-    );
+    throw std::invalid_argument("Unknown equipment type.");
 }
 
 bool EquipmentManager::isAvailable(
     EquipmentType type
 ) const {
-    return getEquipment(type).state ==
-           EquipmentState::Available;
+    return getEquipment(type).state == EquipmentState::Available;
 }
 
 bool EquipmentManager::setBusy(
@@ -63,8 +58,7 @@ bool EquipmentManager::setBusy(
         return false;
     }
 
-    Equipment& equipment =
-        getMutableEquipment(type);
+    Equipment& equipment = getMutableEquipment(type);
 
     if (equipment.state == EquipmentState::Busy) {
         return false;
@@ -72,8 +66,22 @@ bool EquipmentManager::setBusy(
 
     equipment.state = EquipmentState::Busy;
     equipment.busyTicksRemaining = busyTicks;
+    equipment.reportedStateOverride = false;
 
     return true;
+}
+
+void EquipmentManager::setReportedState(
+    EquipmentType type,
+    EquipmentState state
+) {
+    Equipment& equipment = getMutableEquipment(type);
+
+    equipment.state = state;
+    equipment.busyTicksRemaining = 0;
+
+    // STM32-reported BUSY remains active until STM32 reports AVAILABLE.
+    equipment.reportedStateOverride = (state == EquipmentState::Busy);
 }
 
 void EquipmentManager::update() {
@@ -85,19 +93,20 @@ void EquipmentManager::update() {
     };
 
     for (Equipment* equipment : stations) {
+        // Do not decrement a BUSY state reported by the STM32.
+        if (equipment->reportedStateOverride) {
+            continue;
+        }
+
         if (equipment->state != EquipmentState::Busy) {
             continue;
         }
 
         equipment->busyTicksRemaining =
-            std::max(
-                0,
-                equipment->busyTicksRemaining - 1
-            );
+            std::max(0, equipment->busyTicksRemaining - 1);
 
         if (equipment->busyTicksRemaining == 0) {
-            equipment->state =
-                EquipmentState::Available;
+            equipment->state = EquipmentState::Available;
         }
     }
 }
@@ -114,8 +123,7 @@ void EquipmentManager::displayEquipment() const {
         << "================ EQUIPMENT =================\n";
 
     for (EquipmentType type : types) {
-        const Equipment& equipment =
-            getEquipment(type);
+        const Equipment& equipment = getEquipment(type);
 
         std::cout
             << equipmentTypeName(type)
@@ -123,10 +131,14 @@ void EquipmentManager::displayEquipment() const {
             << equipmentStateName(equipment.state);
 
         if (equipment.state == EquipmentState::Busy) {
-            std::cout
-                << " ("
-                << equipment.busyTicksRemaining
-                << " ticks remaining)";
+            if (equipment.reportedStateOverride) {
+                std::cout << " (reported busy)";
+            } else {
+                std::cout
+                    << " ("
+                    << equipment.busyTicksRemaining
+                    << " ticks remaining)";
+            }
         }
 
         std::cout << '\n';
