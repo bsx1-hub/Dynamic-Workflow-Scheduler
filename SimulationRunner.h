@@ -5,6 +5,7 @@
 #include "Order.h"
 #include "Scheduler.h"
 
+#include <cstddef>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@ struct SimulationMetrics {
 
     int equipmentOperations = 0;
     int ordersBatched = 0;
+    int peakConcurrentOperations = 0;
 };
 
 class SimulationRunner {
@@ -44,13 +46,13 @@ private:
         bool completed = false;
     };
 
+    using SelectionBatch = std::vector<std::size_t>;
+
     Scheduler scheduler;
 
     static constexpr int SECONDS_PER_TICK = 10;
 
-    int preparationTicks(
-        const Order& order
-    ) const;
+    int preparationTicks(const Order& order) const;
 
     bool equipmentIsBusy(
         EquipmentType equipment,
@@ -62,7 +64,10 @@ private:
         const std::vector<ActiveJob>& activeJobs
     ) const;
 
-    std::vector<std::size_t> selectDynamicBatch(
+    // Produces one batch for every free station. A station selected for one
+    // batch is reserved for the rest of this tick, so it cannot be selected
+    // twice before the simulated work begins.
+    std::vector<SelectionBatch> selectDynamicBatches(
         const std::vector<SimulatedOrder>& orders,
         const std::vector<ActiveJob>& activeJobs,
         std::time_t simulationTime
@@ -76,8 +81,6 @@ public:
     ) const;
 };
 
-std::string strategyName(
-    SchedulingStrategy strategy
-);
+std::string strategyName(SchedulingStrategy strategy);
 
 #endif

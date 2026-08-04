@@ -2,81 +2,58 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
-#include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 
-int SimulationRunner::preparationTicks(
-    const Order& order
-) const {
+int SimulationRunner::preparationTicks(const Order& order) const {
     const double rawTicks =
-        static_cast<double>(
-            order.estimatedPrepSeconds
-        ) / SECONDS_PER_TICK;
+        static_cast<double>(order.estimatedPrepSeconds) / SECONDS_PER_TICK;
 
-    return std::max(
-        1,
-        static_cast<int>(
-            std::ceil(rawTicks)
-        )
-    );
+    return std::max(1, static_cast<int>(std::ceil(rawTicks)));
 }
 
 bool SimulationRunner::equipmentIsBusy(
     EquipmentType equipment,
     const std::vector<ActiveJob>& activeJobs
 ) const {
-    for (const ActiveJob& job : activeJobs) {
-        if (job.equipment == equipment) {
-            return true;
+    return std::any_of(
+        activeJobs.begin(),
+        activeJobs.end(),
+        [equipment](const ActiveJob& job) {
+            return job.equipment == equipment;
         }
-    }
-
-    return false;
+    );
 }
 
-std::vector<std::size_t>
-SimulationRunner::selectFIFOOrders(
+std::vector<std::size_t> SimulationRunner::selectFIFOOrders(
     const std::vector<SimulatedOrder>& orders,
     const std::vector<ActiveJob>& activeJobs
 ) const {
     std::vector<std::size_t> selectedIndices;
 
     for (std::size_t i = 0; i < orders.size(); ++i) {
-        const SimulatedOrder& simulatedOrder =
-            orders[i];
+        const SimulatedOrder& simulatedOrder = orders[i];
 
-        if (simulatedOrder.started ||
-            simulatedOrder.completed) {
+        if (simulatedOrder.started || simulatedOrder.completed) {
             continue;
         }
 
         const EquipmentType equipment =
-            equipmentTypeFromBuildKey(
-                simulatedOrder.order.buildKey
-            );
+            equipmentTypeFromBuildKey(simulatedOrder.order.buildKey);
 
-        if (equipmentIsBusy(
-                equipment,
-                activeJobs
-            )) {
+        if (equipmentIsBusy(equipment, activeJobs)) {
             continue;
         }
 
-        const bool equipmentAlreadySelected =
-            std::any_of(
-                selectedIndices.begin(),
-                selectedIndices.end(),
-                [&orders, equipment](
-                    std::size_t selectedIndex
-                ) {
-                    return equipmentTypeFromBuildKey(
-                        orders[selectedIndex]
-                            .order
-                            .buildKey
-                    ) == equipment;
-                }
-            );
+        const bool equipmentAlreadySelected = std::any_of(
+            selectedIndices.begin(),
+            selectedIndices.end(),
+            [&orders, equipment](std::size_t selectedIndex) {
+                return equipmentTypeFromBuildKey(
+                    orders[selectedIndex].order.buildKey
+                ) == equipment;
+            }
+        );
 
         if (!equipmentAlreadySelected) {
             selectedIndices.push_back(i);
@@ -86,88 +63,85 @@ SimulationRunner::selectFIFOOrders(
     return selectedIndices;
 }
 
-std::vector<std::size_t>
-SimulationRunner::selectDynamicBatch(
+std::vector<SimulationRunner::SelectionBatch>
+SimulationRunner::selectDynamicBatches(
     const std::vector<SimulatedOrder>& orders,
     const std::vector<ActiveJob>& activeJobs,
     std::time_t simulationTime
 ) const {
-    std::vector<Order> availableOrders;
-    std::unordered_map<int, std::size_t> indexById;
+    std::vector<SelectionBatch> selectedBatches;
+    std::unordered_set<int> selectedOrderIds;
+    std::unordered_set<int> reservedEquipment;
 
-    for (std::size_t i = 0; i < orders.size(); ++i) {
-        const SimulatedOrder& simulatedOrder =
-            orders[i];
+    while (true) {
+        std::vector<Order> selectableOrders;
+        std::unordered_map<int, std::size_t> indexById;
 
-        if (simulatedOrder.started ||
-            simulatedOrder.completed) {
-            continue;
+        for (std::size_t i = 0; i < orders.size(); ++i) {
+            const SimulatedOrder& simulatedOrder = orders[i];
+
+            if (simulatedOrder.started || simulatedOrder.completed ||
+                selectedOrderIds.count(simulatedOrder.order.id) != 0) {
+                continue;
+            }
+
+            const EquipmentType equipment =
+                equipmentTypeFromBuildKey(simulatedOrder.order.buildKey);
+
+            if (equipmentIsBusy(equipment, activeJobs) ||
+                reservedEquipment.count(static_cast<int>(equipment)) != 0) {
+                continue;
+            }
+
+            selectableOrders.push_back(simulatedOrder.order);
+            indexById[simulatedOrder.order.id] = i;
         }
 
-        const EquipmentType equipment =
-            equipmentTypeFromBuildKey(
-                simulatedOrder.order.buildKey
-            );
-
-        if (equipmentIsBusy(
-                equipment,
-                activeJobs
-            )) {
-            continue;
+        if (selectableOrders.empty()) {
+            break;
         }
 
-        availableOrders.push_back(
-            simulatedOrder.order
-        );
-
-        indexById[
-            simulatedOrder.order.id
-        ] = i;
-    }
-
-    if (availableOrders.empty()) {
-        return {};
-    }
-
-    const ScheduleDecision decision =
-        scheduler.makeDecision(
-            availableOrders,
+        const ScheduleDecision decision = scheduler.makeDecision(
+            selectableOrders,
             simulationTime,
             3
         );
 
-    if (decision.anchorOrderId == -1) {
-        return {};
-    }
+        if (decision.anchorOrderId == -1) {
+            break;
+        }
 
-    std::vector<std::size_t> selectedIndices;
+        const auto anchorMatch = indexById.find(decision.anchorOrderId);
+        if (anchorMatch == indexById.end()) {
+            break;
+        }
 
-    const auto anchorMatch =
-        indexById.find(
-            decision.anchorOrderId
+        SelectionBatch batch {anchorMatch->second};
+        const EquipmentType batchEquipment = equipmentTypeFromBuildKey(
+            orders[anchorMatch->second].order.buildKey
         );
 
-    if (anchorMatch == indexById.end()) {
-        return {};
-    }
+        for (int orderId : decision.batchedOrderIds) {
+            const auto match = indexById.find(orderId);
 
-    selectedIndices.push_back(
-        anchorMatch->second
-    );
+            if (match == indexById.end() ||
+                equipmentTypeFromBuildKey(orders[match->second].order.buildKey) !=
+                    batchEquipment) {
+                continue;
+            }
 
-    for (int orderId :
-         decision.batchedOrderIds) {
-        const auto match =
-            indexById.find(orderId);
-
-        if (match != indexById.end()) {
-            selectedIndices.push_back(
-                match->second
-            );
+            batch.push_back(match->second);
         }
+
+        for (std::size_t index : batch) {
+            selectedOrderIds.insert(orders[index].order.id);
+        }
+
+        reservedEquipment.insert(static_cast<int>(batchEquipment));
+        selectedBatches.push_back(std::move(batch));
     }
 
-    return selectedIndices;
+    return selectedBatches;
 }
 
 SimulationMetrics SimulationRunner::run(
@@ -176,56 +150,31 @@ SimulationMetrics SimulationRunner::run(
     std::time_t scenarioStart
 ) const {
     SimulationMetrics metrics;
-    metrics.strategyName =
-        strategyName(strategy);
+    metrics.strategyName = strategyName(strategy);
 
     std::vector<SimulatedOrder> orders;
     orders.reserve(orderStream.size());
 
     for (const Order& order : orderStream) {
-        const int arrivalTick =
-            static_cast<int>(
-                std::difftime(
-                    order.placedAt,
-                    scenarioStart
-                ) / SECONDS_PER_TICK
-            );
-
-        orders.push_back({
-            order,
-            std::max(0, arrivalTick)
-        });
+        const int arrivalTick = static_cast<int>(
+            std::difftime(order.placedAt, scenarioStart) / SECONDS_PER_TICK
+        );
+        orders.push_back({order, std::max(0, arrivalTick)});
     }
 
-    std::sort(
-        orders.begin(),
-        orders.end(),
-        [](const SimulatedOrder& left,
-           const SimulatedOrder& right) {
-            if (left.arrivalTick !=
-                right.arrivalTick) {
-                return left.arrivalTick <
-                       right.arrivalTick;
-            }
-
-            return left.order.id <
-                   right.order.id;
+    std::sort(orders.begin(), orders.end(), [](const SimulatedOrder& left,
+                                                const SimulatedOrder& right) {
+        if (left.arrivalTick != right.arrivalTick) {
+            return left.arrivalTick < right.arrivalTick;
         }
-    );
+        return left.order.id < right.order.id;
+    });
 
     std::vector<ActiveJob> activeJobs;
-
     int tick = 0;
     int completedCount = 0;
 
-    while (
-        completedCount <
-        static_cast<int>(orders.size())
-    ) {
-        /*
-         * Complete work performed during the
-         * previous tick.
-         */
+    while (completedCount < static_cast<int>(orders.size())) {
         for (ActiveJob& job : activeJobs) {
             --job.ticksRemaining;
         }
@@ -235,12 +184,9 @@ SimulationMetrics SimulationRunner::run(
                 continue;
             }
 
-            for (int completedId :
-                 job.orderIds) {
-                for (SimulatedOrder& order :
-                     orders) {
-                    if (order.order.id ==
-                        completedId) {
+            for (int completedId : job.orderIds) {
+                for (SimulatedOrder& order : orders) {
+                    if (order.order.id == completedId) {
                         order.completed = true;
                         order.completionTick = tick;
                         ++completedCount;
@@ -251,182 +197,96 @@ SimulationMetrics SimulationRunner::run(
         }
 
         activeJobs.erase(
-            std::remove_if(
-                activeJobs.begin(),
-                activeJobs.end(),
-                [](const ActiveJob& job) {
-                    return job.ticksRemaining <= 0;
-                }
-            ),
+            std::remove_if(activeJobs.begin(), activeJobs.end(),
+                [](const ActiveJob& job) { return job.ticksRemaining <= 0; }),
             activeJobs.end()
         );
 
-        /*
-         * Determine which orders have arrived.
-         */
-        std::vector<SimulatedOrder> eligibleOrders =
-            orders;
-
-        for (SimulatedOrder& order :
-             eligibleOrders) {
+        std::vector<SimulatedOrder> eligibleOrders = orders;
+        for (SimulatedOrder& order : eligibleOrders) {
             if (order.arrivalTick > tick) {
                 order.started = true;
             }
         }
 
-        std::vector<std::size_t> selections;
+        if (strategy == SchedulingStrategy::FIFO) {
+            const std::vector<std::size_t> selections =
+                selectFIFOOrders(eligibleOrders, activeJobs);
 
-        if (strategy ==
-            SchedulingStrategy::FIFO) {
-            selections =
-                selectFIFOOrders(
-                    eligibleOrders,
-                    activeJobs
-                );
-        } else {
-            const std::time_t simulationTime =
-                scenarioStart +
-                tick * SECONDS_PER_TICK;
-
-            selections =
-                selectDynamicBatch(
-                    eligibleOrders,
-                    activeJobs,
-                    simulationTime
-                );
-        }
-
-        /*
-         * Start selected orders.
-         */
-        if (strategy ==
-            SchedulingStrategy::FIFO) {
-            for (std::size_t index :
-                 selections) {
-                SimulatedOrder& order =
-                    orders[index];
-
-                if (order.arrivalTick > tick ||
-                    order.started ||
-                    order.completed) {
+            for (std::size_t index : selections) {
+                SimulatedOrder& order = orders[index];
+                if (order.arrivalTick > tick || order.started || order.completed) {
                     continue;
                 }
 
                 const EquipmentType equipment =
-                    equipmentTypeFromBuildKey(
-                        order.order.buildKey
-                    );
-
+                    equipmentTypeFromBuildKey(order.order.buildKey);
                 order.started = true;
                 order.startTick = tick;
-
                 activeJobs.push_back({
                     equipment,
                     {order.order.id},
                     preparationTicks(order.order)
                 });
-
                 ++metrics.equipmentOperations;
             }
-        } else if (!selections.empty()) {
-            std::vector<std::size_t>
-                validSelections;
+        } else {
+            const std::time_t simulationTime =
+                scenarioStart + tick * SECONDS_PER_TICK;
+            const std::vector<SelectionBatch> batches =
+                selectDynamicBatches(eligibleOrders, activeJobs, simulationTime);
 
-            for (std::size_t index :
-                 selections) {
-                if (index >= orders.size()) {
+            for (const SelectionBatch& selection : batches) {
+                if (selection.empty()) {
                     continue;
                 }
 
-                SimulatedOrder& order =
-                    orders[index];
-
-                if (order.arrivalTick <= tick &&
-                    !order.started &&
-                    !order.completed) {
-                    validSelections.push_back(
-                        index
-                    );
-                }
-            }
-
-            if (!validSelections.empty()) {
-                const EquipmentType equipment =
-                    equipmentTypeFromBuildKey(
-                        orders[
-                            validSelections.front()
-                        ].order.buildKey
-                    );
-
+                const EquipmentType equipment = equipmentTypeFromBuildKey(
+                    orders[selection.front()].order.buildKey
+                );
                 int longestPreparation = 1;
-
                 std::vector<int> batchIds;
 
-                for (std::size_t index :
-                     validSelections) {
-                    SimulatedOrder& order =
-                        orders[index];
+                for (std::size_t index : selection) {
+                    SimulatedOrder& order = orders[index];
+                    if (order.arrivalTick > tick || order.started || order.completed ||
+                        equipmentTypeFromBuildKey(order.order.buildKey) != equipment) {
+                        continue;
+                    }
 
                     order.started = true;
                     order.startTick = tick;
-
-                    longestPreparation =
-                        std::max(
-                            longestPreparation,
-                            preparationTicks(
-                                order.order
-                            )
-                        );
-
-                    batchIds.push_back(
-                        order.order.id
+                    longestPreparation = std::max(
+                        longestPreparation,
+                        preparationTicks(order.order)
                     );
+                    batchIds.push_back(order.order.id);
                 }
 
-                /*
-                 * Shared setup model:
-                 *
-                 * The longest drink determines the
-                 * base batch time. Each additional
-                 * order adds one tick.
-                 */
-                const int batchDuration =
-                    longestPreparation +
-                    static_cast<int>(
-                        validSelections.size()
-                    ) - 1;
+                if (batchIds.empty()) {
+                    continue;
+                }
 
-                activeJobs.push_back({
-                    equipment,
-                    batchIds,
-                    batchDuration
-                });
-
+                const int batchDuration = longestPreparation +
+                    static_cast<int>(batchIds.size()) - 1;
+                activeJobs.push_back({equipment, batchIds, batchDuration});
                 ++metrics.equipmentOperations;
-
-                if (validSelections.size() > 1) {
-                    metrics.ordersBatched +=
-                        static_cast<int>(
-                            validSelections.size()
-                        ) - 1;
-                }
+                metrics.ordersBatched += static_cast<int>(batchIds.size()) - 1;
             }
         }
 
-        ++tick;
+        metrics.peakConcurrentOperations = std::max(
+            metrics.peakConcurrentOperations,
+            static_cast<int>(activeJobs.size())
+        );
 
-        /*
-         * Safety limit prevents an accidental
-         * infinite simulation.
-         */
+        ++tick;
         if (tick > 100'000) {
             break;
         }
     }
 
-    metrics.ordersCompleted =
-        completedCount;
-
+    metrics.ordersCompleted = completedCount;
     metrics.totalTicks = tick;
 
     double totalWait = 0.0;
@@ -437,42 +297,25 @@ SimulationMetrics SimulationRunner::run(
             continue;
         }
 
-        const int waitTicks =
-            order.startTick -
-            order.arrivalTick;
-
+        const int waitTicks = order.startTick - order.arrivalTick;
         totalWait += waitTicks;
-        maximumWait =
-            std::max(
-                maximumWait,
-                waitTicks
-            );
+        maximumWait = std::max(maximumWait, waitTicks);
     }
 
     if (!orders.empty()) {
-        metrics.averageWaitTicks =
-            totalWait /
-            static_cast<double>(
-                orders.size()
-            );
+        metrics.averageWaitTicks = totalWait / static_cast<double>(orders.size());
     }
-
-    metrics.maximumWaitTicks =
-        maximumWait;
+    metrics.maximumWaitTicks = maximumWait;
 
     return metrics;
 }
 
-std::string strategyName(
-    SchedulingStrategy strategy
-) {
+std::string strategyName(SchedulingStrategy strategy) {
     switch (strategy) {
         case SchedulingStrategy::FIFO:
             return "FIFO";
-
         case SchedulingStrategy::DynamicBatching:
             return "Dynamic Scheduling with Batching";
     }
-
     return "Unknown";
 }
