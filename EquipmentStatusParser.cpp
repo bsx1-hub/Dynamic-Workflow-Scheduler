@@ -3,6 +3,7 @@
 #include <array>
 #include <string_view>
 
+
 namespace {
 
 bool containsWhitespace(const std::string& value) {

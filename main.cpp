@@ -6,6 +6,8 @@
 #include "QueueManager.h"
 #include "Scheduler.h"
 #include "TerminalDisplay.h"
+#include "StatusDemo.h"
+#include <cstring>
 
 #include <chrono>
 #include <ctime>
@@ -242,7 +244,16 @@ void runManualMode() {
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc == 2 &&
+        (std::strcmp(argv[1], "--demo") == 0 ||
+         std::strcmp(argv[1], "--simulate-status") == 0)) {
+        return runAutomatedStatusDemo(false);
+    }
+
+    if (argc == 2 && std::strcmp(argv[1], "--demo-fast") == 0) {
+        return runAutomatedStatusDemo(true);
+    }
     TerminalDisplay::enableAnsiColors();
 
     while (true) {
