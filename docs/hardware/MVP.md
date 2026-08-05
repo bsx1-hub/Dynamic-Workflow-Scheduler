@@ -177,11 +177,4 @@ This is a proof of the data path, not a production coffee-shop controller.
 - The prototype monitors three stations only. The existing software's `Other`
   category remains simulation-only during this MVP.
 
-## Acceptance Check
 
-The milestone is complete when you can show and explain this path:
-
-```text
-Button press -> debounced STM32 GPIO event -> STATION UART message
--> C++ equipment update -> recomputed schedule -> updated terminal recommendation
-```
